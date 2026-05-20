@@ -1,0 +1,32 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Users: đọc nếu đã login, sửa chỉ profile của mình
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth.uid == userId;
+    }
+
+    // Conversations: chỉ participants mới được đọc/ghi
+    match /conversations/{conversationId} {
+      allow read, write: if request.auth.uid in resource.data.participants
+                         || request.auth.uid in request.resource.data.participants;
+
+      // Messages subcollection
+      match /messages/{messageId} {
+        allow read, write: if request.auth != null;
+      }
+    }
+
+    // Calls: caller hoặc callee mới được tương tác
+    match /calls/{callId} {
+      allow read: if request.auth.uid == resource.data.callerId
+                  || request.auth.uid == resource.data.calleeId;
+      allow create: if request.auth.uid == request.resource.data.callerId;
+      allow update: if request.auth.uid == resource.data.calleeId
+                    || request.auth.uid == resource.data.callerId;
+    }
+  }
+}
+

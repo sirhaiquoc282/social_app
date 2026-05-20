@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Navy Blue chủ đạo -->
+    <color name="navy_blue">#1B2A6B</color>
+    <color name="navy_blue_dark">#0D1B4A</color>
+    <!-- Sky Blue accent -->
+    <color name="light_sky_blue">#ADD8FF</color>
+    <!-- Status bar -->
+    <color name="status_bar_color">#0D1B4A</color>
+</resources>
+

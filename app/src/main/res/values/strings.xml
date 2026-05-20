@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SocialApp</string>
+    <string name="login">Đăng nhập</string>
+    <string name="register">Đăng ký</string>
+    <string name="logout">Đăng xuất</string>
+    <string name="send">Gửi</string>
+    <string name="incoming_call">Cuộc gọi đến</string>
+    <string name="answer">Nghe</string>
+    <string name="decline">Từ chối</string>
+    <string name="end_call">Kết thúc</string>
+    <string name="mute">Tắt mic</string>
+    <string name="unmute">Bật mic</string>
+    <string name="camera_off">Tắt cam</string>
+    <string name="camera_on">Bật cam</string>
+    <string name="switch_camera">Đổi cam</string>
+</resources>
+
