@@ -43,9 +43,19 @@ fun VideoCallScreen(
     val isCamMuted by viewModel.isCamMuted.collectAsState()
     val remoteUid by viewModel.remoteUid.collectAsState()
     val readyToJoinVideo by viewModel.readyToJoinVideo.collectAsState()
+    var permissionGranted by remember { mutableStateOf(false) }
 
     val localSurfaceView = remember { SurfaceView(context) }
     val remoteSurfaceView = remember { SurfaceView(context) }
+
+    // Yêu cầu quyền Camera & Micro
+    com.example.socialapp.ui.call.RequestCallPermissions(
+        callType = "video",
+        onGranted = { permissionGranted = true },
+        onDenied = { onCallEnded() }
+    ) { requestPermission ->
+        LaunchedEffect(Unit) { requestPermission() }
+    }
 
     LaunchedEffect(callState) {
         when (callState) {
@@ -57,13 +67,17 @@ fun VideoCallScreen(
     // Caller: join video ngay khi callId thực được emit
     LaunchedEffect(readyToJoinVideo) {
         readyToJoinVideo?.let { channelName ->
-            viewModel.joinVideoWithView(localSurfaceView, channelName)
+            if (permissionGranted) {
+                viewModel.joinVideoWithView(localSurfaceView, channelName)
+            }
         }
     }
 
-    LaunchedEffect(Unit) {
-        if (!isCallee && callId == "new") {
-            // Caller: khởi tạo video call — cần localSurfaceView
+    LaunchedEffect(permissionGranted) {
+        if (!permissionGranted) return@LaunchedEffect
+
+        if (!isCallee && callId == "new" && callState is CallState.Idle) {
+            // Caller: khởi tạo video call
             viewModel.startCall(
                 context = context,
                 calleeId = calleeId,
@@ -73,16 +87,16 @@ fun VideoCallScreen(
                     .currentUser?.photoUrl?.toString() ?: "",
                 type = "video"
             )
-            // joinVideoWithView sẽ được kích hoạt bởi readyToJoinVideo
-        } else if (isCallee) {
-            // Đến từ IncomingCallActivity hoặc HomeScreen
+        } else if (isCallee && callState is CallState.Ringing) {
+            // Callee: Chuẩn bị signal
             viewModel.prepareCallAsCallee(
                 callId = callId,
-                callerId = calleeId,  // calleeId param = từ IncomingCallActivity
+                callerId = calleeId,
                 callerName = calleeName,
                 callerAvatar = calleeAvatar,
                 type = "video"
             )
+            // Tự động accept nếu vào từ Activity
             viewModel.acceptCall(context)
             viewModel.joinVideoWithView(localSurfaceView, callId)
         }

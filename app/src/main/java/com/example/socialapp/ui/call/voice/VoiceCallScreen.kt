@@ -58,9 +58,11 @@ fun VoiceCallScreen(
         }
     }
 
-    // Khởi tạo: nếu là caller (callId == "new"), bắt đầu cuộc gọi
-    LaunchedEffect(Unit) {
-        if (!isCallee && callId == "new") {
+    // Khởi tạo: nếu là caller (callId == "new"), bắt đầu cuộc gọi khi đã có quyền
+    LaunchedEffect(permissionGranted) {
+        if (!permissionGranted) return@LaunchedEffect
+
+        if (!isCallee && callId == "new" && callState is CallState.Idle) {
             viewModel.startCall(
                 context = context,
                 calleeId = calleeId,
@@ -70,7 +72,7 @@ fun VoiceCallScreen(
                     .currentUser?.photoUrl?.toString() ?: "",
                 type = "voice"
             )
-        } else if (isCallee) {
+        } else if (isCallee && callState is CallState.Ringing) {
             // Đến từ IncomingCallActivity: setup signal trước khi accept
             viewModel.prepareCallAsCallee(
                 callId = callId,
