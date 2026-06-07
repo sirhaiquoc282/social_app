@@ -22,6 +22,9 @@ class AgoraManager @Inject constructor(
     /** Khởi tạo Agora engine với event handler */
     fun initEngine(eventHandler: IRtcEngineEventHandler): Boolean {
         return try {
+            engine?.let { it.leaveChannel(); RtcEngine.destroy() }
+            engine = null
+
             val config = RtcEngineConfig().apply {
                 mContext = context
                 mAppId = BuildConfig.AGORA_APP_ID

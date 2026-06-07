@@ -1,0 +1,9 @@
+# Không commit các file nhạy cảm
+*.jks
+*.keystore
+.gradle/
+build/
+.idea/
+*.iml
+local.properties
+

@@ -3,22 +3,20 @@ package com.example.socialapp.ui.auth
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusDirection
-import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.socialapp.ui.theme.*
 
@@ -29,11 +27,10 @@ fun RegisterScreen(
     viewModel: AuthViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    var displayName by remember { mutableStateOf("") }
+    var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    var passwordVisible by remember { mutableStateOf(false) }
-    val focusManager = LocalFocusManager.current
+    var confirmPassword by remember { mutableStateOf("") }
 
     LaunchedEffect(uiState) {
         if (uiState is AuthUiState.Success) {
@@ -45,124 +42,121 @@ fun RegisterScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(NavyBlueDark)
+            .background(DarkBg)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 28.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .padding(horizontal = 28.dp)
         ) {
-            Icon(
-                imageVector = Icons.Default.PersonAdd,
-                contentDescription = null,
-                tint = LightSkyBlue,
-                modifier = Modifier.size(56.dp)
-            )
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(16.dp))
+
+            IconButton(onClick = onNavigateToLogin) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = White)
+            }
+
+            Spacer(Modifier.height(24.dp))
+
+            // Title
             Text(
-                "Tạo tài khoản",
-                style = MaterialTheme.typography.headlineMedium,
-                color = White,
-                fontWeight = FontWeight.Bold
+                buildAnnotatedString {
+                    append("Sign up with ")
+                    withStyle(SpanStyle(color = ChatboxTealAccent, fontWeight = FontWeight.Bold)) {
+                        append("Email")
+                    }
+                },
+                fontSize = 26.sp,
+                fontWeight = FontWeight.Bold,
+                color = White
             )
-            Text("Đăng ký để bắt đầu", style = MaterialTheme.typography.bodyMedium, color = LightSkyBlue)
-            Spacer(Modifier.height(32.dp))
 
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = White)
+            Spacer(Modifier.height(8.dp))
+
+            Text(
+                "Get chatting with friends and family today by\nsigning up for our chat app!",
+                style = MaterialTheme.typography.bodyMedium,
+                color = TextSecondary,
+                lineHeight = 20.sp
+            )
+
+            Spacer(Modifier.height(36.dp))
+
+            // Fields
+            Text("Your name", color = ChatboxTealAccent, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+            Spacer(Modifier.height(6.dp))
+            AuthTextField(value = name, onValueChange = { name = it }, placeholder = "Enter your name")
+
+            Spacer(Modifier.height(20.dp))
+
+            Text("Your email", color = ChatboxTealAccent, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+            Spacer(Modifier.height(6.dp))
+            AuthTextField(value = email, onValueChange = { email = it },
+                keyboardType = KeyboardType.Email, placeholder = "Enter your email")
+
+            Spacer(Modifier.height(20.dp))
+
+            Text("Password", color = ChatboxTealAccent, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+            Spacer(Modifier.height(6.dp))
+            AuthTextField(value = password, onValueChange = { password = it },
+                keyboardType = KeyboardType.Password, isPassword = true, placeholder = "Create password")
+
+            Spacer(Modifier.height(20.dp))
+
+            Text("Confirm Password", color = ChatboxTealAccent, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+            Spacer(Modifier.height(6.dp))
+            AuthTextField(value = confirmPassword, onValueChange = { confirmPassword = it },
+                keyboardType = KeyboardType.Password, isPassword = true, placeholder = "Confirm your password")
+
+            Spacer(Modifier.weight(1f))
+
+            if (uiState is AuthUiState.Error) {
+                Text(
+                    (uiState as AuthUiState.Error).message,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+            }
+
+            Button(
+                onClick = {
+                    if (password != confirmPassword) return@Button
+                    viewModel.registerWithEmail(email, password, name)
+                },
+                enabled = uiState !is AuthUiState.Loading,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                shape = RoundedCornerShape(28.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = DarkSurface,
+                    contentColor = White
+                )
             ) {
-                Column(
-                    modifier = Modifier.padding(24.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    OutlinedTextField(
-                        value = displayName,
-                        onValueChange = { displayName = it },
-                        label = { Text("Tên hiển thị") },
-                        leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                        keyboardActions = KeyboardActions(onNext = { focusManager.moveFocus(FocusDirection.Down) }),
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = inputColors()
-                    )
-
-                    OutlinedTextField(
-                        value = email,
-                        onValueChange = { email = it },
-                        label = { Text("Email") },
-                        leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Email,
-                            imeAction = ImeAction.Next
-                        ),
-                        keyboardActions = KeyboardActions(onNext = { focusManager.moveFocus(FocusDirection.Down) }),
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = inputColors()
-                    )
-
-                    OutlinedTextField(
-                        value = password,
-                        onValueChange = { password = it },
-                        label = { Text("Mật khẩu (ít nhất 6 ký tự)") },
-                        leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
-                        trailingIcon = {
-                            IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                                Icon(
-                                    if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                    contentDescription = null
-                                )
-                            }
-                        },
-                        visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Password,
-                            imeAction = ImeAction.Done
-                        ),
-                        keyboardActions = KeyboardActions(onDone = {
-                            focusManager.clearFocus()
-                            viewModel.registerWithEmail(email, password, displayName)
-                        }),
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = inputColors()
-                    )
-
-                    if (uiState is AuthUiState.Error) {
-                        Text(
-                            text = (uiState as AuthUiState.Error).message,
-                            color = ErrorRed,
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
-
-                    Button(
-                        onClick = { viewModel.registerWithEmail(email, password, displayName) },
-                        modifier = Modifier.fillMaxWidth().height(52.dp),
-                        enabled = uiState !is AuthUiState.Loading,
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = NavyBlue)
-                    ) {
-                        if (uiState is AuthUiState.Loading) {
-                            CircularProgressIndicator(modifier = Modifier.size(20.dp), color = White, strokeWidth = 2.dp)
-                        } else {
-                            Text("Đăng ký", color = White, fontWeight = FontWeight.SemiBold)
-                        }
-                    }
+                if (uiState is AuthUiState.Loading) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), color = ChatboxTealAccent, strokeWidth = 2.dp)
+                } else {
+                    Text("Create an account", fontWeight = FontWeight.SemiBold, color = White)
                 }
             }
 
-            Spacer(Modifier.height(20.dp))
-            TextButton(onClick = onNavigateToLogin) {
-                Text("Đã có tài khoản? ", color = LightSkyBlue)
-                Text("Đăng nhập", color = White, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(16.dp))
+
+            TextButton(
+                onClick = onNavigateToLogin,
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            ) {
+                Text(
+                    buildAnnotatedString {
+                        withStyle(SpanStyle(color = TextSecondary)) { append("Already have an account? ") }
+                        withStyle(SpanStyle(color = ChatboxTealAccent, fontWeight = FontWeight.Bold)) { append("Log in") }
+                    }
+                )
             }
+
+            Spacer(Modifier.height(16.dp))
         }
     }
 }
-

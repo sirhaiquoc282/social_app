@@ -97,6 +97,35 @@ class CallRepository @Inject constructor(
         awaitClose { listener.remove() }
     }
 
+    /** Lịch sử cuộc gọi của user hiện tại (cả gọi đi lẫn gọi đến), sắp xếp mới nhất lên trước. */
+    fun observeCallHistory(): Flow<List<CallSignal>> = callbackFlow {
+        val results = mutableMapOf<String, CallSignal>()
+
+        fun emit() = trySend(results.values.sortedByDescending { it.createdAt }.toList())
+
+        val asCaller = firestore.collection("calls")
+            .whereEqualTo("callerId", uid)
+            .addSnapshotListener { snap, _ ->
+                snap?.documents?.forEach { doc ->
+                    doc.toObject(CallSignal::class.java)?.copy(id = doc.id)
+                        ?.let { results[doc.id] = it }
+                }
+                emit()
+            }
+
+        val asCallee = firestore.collection("calls")
+            .whereEqualTo("calleeId", uid)
+            .addSnapshotListener { snap, _ ->
+                snap?.documents?.forEach { doc ->
+                    doc.toObject(CallSignal::class.java)?.copy(id = doc.id)
+                        ?.let { results[doc.id] = it }
+                }
+                emit()
+            }
+
+        awaitClose { asCaller.remove(); asCallee.remove() }
+    }
+
     /**
      * Lắng nghe cuộc gọi đến cho callee đang online.
      * Dùng khi app foreground — FCM xử lý khi background.

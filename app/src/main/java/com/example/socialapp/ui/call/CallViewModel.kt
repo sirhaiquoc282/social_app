@@ -149,6 +149,10 @@ class CallViewModel @Inject constructor(
             try {
                 callRepository.acceptCall(currentCallId)
                 initAgoraEngine(context, signal.channelName, signal.type, isCallee = true)
+                // Với video, báo UI biết channelName để join với SurfaceView
+                if (signal.type == "video") {
+                    _readyToJoinVideo.value = signal.channelName
+                }
                 _callState.value = CallState.Connected
                 observeCallStatus(currentCallId)
             } catch (e: Exception) {
