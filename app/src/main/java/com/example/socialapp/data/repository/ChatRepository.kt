@@ -50,7 +50,8 @@ class ChatRepository @Inject constructor(
                     "participants" to listOf(currentUid, otherUid),
                     "lastMessage" to text,
                     "lastMessageAt" to FieldValue.serverTimestamp(),
-                    "lastSenderId" to currentUid
+                    "lastSenderId" to currentUid,
+                    "isRead" to false // Đánh dấu chưa đọc
                 ),
                 SetOptions.merge()
             )
@@ -69,9 +70,27 @@ class ChatRepository @Inject constructor(
                 val messages = snapshot?.documents?.mapNotNull { doc ->
                     doc.toObject(Message::class.java)?.copy(id = doc.id)
                 } ?: emptyList()
+                
+                // Mỗi khi có tin nhắn mới trong khi đang mở màn hình chat, đánh dấu đã đọc
+                if (messages.isNotEmpty() && messages.last().senderId != currentUid) {
+                    firestore.collection("conversations").document(convId).update("isRead", true)
+                }
+                
                 trySend(messages)
             }
+        
+        // Đánh dấu đã đọc ngay khi vừa mở chat
+        markConversationRead(convId)
+        
         awaitClose { listener.remove() }
+    }
+
+    /** Đánh dấu cuộc hội thoại đã đọc */
+    suspend fun markConversationRead(convId: String) {
+        try {
+            firestore.collection("conversations").document(convId)
+                .update("isRead", true).await()
+        } catch (_: Exception) {}
     }
 
     /** Lắng nghe danh sách conversations của user hiện tại */
@@ -97,6 +116,8 @@ class ChatRepository @Inject constructor(
             firestore.collection("conversations").document(convId)
                 .collection("messages").document(messageId)
                 .update("readAt", FieldValue.serverTimestamp()).await()
+            
+            markConversationRead(convId)
         } catch (_: Exception) {}
     }
 }

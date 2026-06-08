@@ -8,6 +8,7 @@ data class Conversation(
     val lastMessage: String = "",
     val lastMessageAt: Timestamp? = null,
     val lastSenderId: String = "",
+    val isRead: Boolean = true, // Thêm trường này
     // Runtime only — populated from /users/
     val otherUserName: String = "",
     val otherUserAvatar: String = "",

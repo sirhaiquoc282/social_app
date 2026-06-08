@@ -175,7 +175,10 @@ fun HomeScreen(
                     .background(DarkCard),
                 contentPadding = PaddingValues(top = 8.dp)
             ) {
-                items(conversations) { conv ->
+                items(
+                    items = conversations,
+                    key = { it.id } // Quan trọng để UI biết item nào thay đổi
+                ) { conv ->
                     ConversationItem(
                         conversation = conv,
                         currentUid = viewModel.getCurrentUid(),
@@ -256,6 +259,7 @@ private fun ConversationItem(
         SimpleDateFormat("HH:mm", Locale.getDefault()).format(it)
     } ?: ""
     val isMyMessage = conversation.lastSenderId == currentUid
+    val isUnread = !conversation.isRead && !isMyMessage
 
     Row(
         modifier = Modifier
@@ -294,20 +298,38 @@ private fun ConversationItem(
             ) {
                 Text(
                     conversation.otherUserName,
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary,
+                    fontWeight = if (isUnread) FontWeight.ExtraBold else FontWeight.Bold,
+                    color = if (isUnread) White else TextPrimary,
                     style = MaterialTheme.typography.bodyLarge
                 )
-                Text(timeStr, color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+                Text(
+                    timeStr, 
+                    color = if (isUnread) ChatboxTealAccent else TextSecondary, 
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = if (isUnread) FontWeight.Bold else FontWeight.Normal
+                )
             }
             Spacer(Modifier.height(3.dp))
-            Text(
-                if (isMyMessage) "You: ${conversation.lastMessage}" else conversation.lastMessage,
-                color = TextSecondary,
-                style = MaterialTheme.typography.bodyMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = if (isMyMessage) "You: ${conversation.lastMessage}" else conversation.lastMessage,
+                    color = if (isUnread) White.copy(alpha = 0.9f) else TextSecondary,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                    fontWeight = if (isUnread) FontWeight.SemiBold else FontWeight.Normal
+                )
+                if (isUnread) {
+                    Box(
+                        modifier = Modifier
+                            .padding(start = 8.dp)
+                            .size(10.dp)
+                            .clip(CircleShape)
+                            .background(ChatboxTealAccent)
+                    )
+                }
+            }
         }
     }
     HorizontalDivider(color = DarkDivider, thickness = 0.5.dp, modifier = Modifier.padding(start = 82.dp))

@@ -35,10 +35,15 @@ class ChatViewModel @Inject constructor(
 
     private var currentOtherUid: String = ""
 
+    private var messagesJob: kotlinx.coroutines.Job? = null
+
     fun loadMessages(otherUid: String) {
+        if (currentOtherUid == otherUid && messagesJob?.isActive == true) return
         currentOtherUid = otherUid
+        messagesJob?.cancel()
+        
         _uiState.value = ChatUiState.Loading
-        viewModelScope.launch {
+        messagesJob = viewModelScope.launch {
             chatRepository.observeMessages(otherUid)
                 .catch { _uiState.value = ChatUiState.Error(it.message) }
                 .collect { msgs ->
