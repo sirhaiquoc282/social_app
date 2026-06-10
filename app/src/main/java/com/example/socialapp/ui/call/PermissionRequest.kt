@@ -5,6 +5,7 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalContext
 import com.example.socialapp.util.PermissionHelper
 
 /**
@@ -19,10 +20,18 @@ fun RequestCallPermissions(
     onDenied: () -> Unit,
     content: @Composable (requestPermission: () -> Unit) -> Unit
 ) {
+    val context = LocalContext.current
     val permissions = if (callType == "video") {
         PermissionHelper.VIDEO_PERMISSIONS
     } else {
         PermissionHelper.AUDIO_PERMISSIONS
+    }
+
+    // Kiểm tra xem quyền đã được cấp chưa
+    val alreadyGranted = if (callType == "video") {
+        PermissionHelper.hasVideoPermissions(context)
+    } else {
+        PermissionHelper.hasAudioPermissions(context)
     }
 
     val launcher = rememberLauncherForActivityResult(
@@ -31,6 +40,19 @@ fun RequestCallPermissions(
         if (results.all { it.value }) onGranted() else onDenied()
     }
 
-    content { launcher.launch(permissions) }
+    // Nếu quyền đã được cấp rồi, gọi onGranted ngay lập tức
+    LaunchedEffect(alreadyGranted) {
+        if (alreadyGranted) {
+            onGranted()
+        }
+    }
+
+    content {
+        if (alreadyGranted) {
+            onGranted()
+        } else {
+            launcher.launch(permissions)
+        }
+    }
 }
 

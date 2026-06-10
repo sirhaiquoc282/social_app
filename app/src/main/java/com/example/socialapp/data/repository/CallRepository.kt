@@ -33,21 +33,23 @@ class CallRepository @Inject constructor(
         callerName: String,
         callerAvatar: String,
         type: String   // "voice" | "video"
-    ): String {
+    ): Pair<String, String> {
         val callId = UUID.randomUUID().toString()
+        val channelName = if (com.example.socialapp.BuildConfig.AGORA_TOKEN.isNotEmpty()) "test_channel" else callId
+
         firestore.collection("calls").document(callId).set(
             hashMapOf(
                 "callerId" to uid,
                 "calleeId" to calleeId,
                 "callerName" to callerName,
                 "callerAvatar" to callerAvatar,
-                "channelName" to callId,
+                "channelName" to channelName,
                 "type" to type,
                 "status" to "ringing",
                 "createdAt" to FieldValue.serverTimestamp()
             )
         ).await()
-        return callId
+        return Pair(callId, channelName)
     }
 
     /** Callee: chấp nhận cuộc gọi */

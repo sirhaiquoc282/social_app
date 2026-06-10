@@ -40,7 +40,9 @@ fun VoiceCallScreen(
     val callState by viewModel.callState.collectAsState()
     val isMicMuted by viewModel.isMicMuted.collectAsState()
     val isSpeakerOn by viewModel.isSpeakerOn.collectAsState()
-    var permissionGranted by remember { mutableStateOf(false) }
+    var permissionGranted by remember { 
+        mutableStateOf(com.example.socialapp.util.PermissionHelper.hasAudioPermissions(context)) 
+    }
 
     RequestCallPermissions(
         callType = "voice",

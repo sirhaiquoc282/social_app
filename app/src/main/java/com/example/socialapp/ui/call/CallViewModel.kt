@@ -90,16 +90,20 @@ class CallViewModel @Inject constructor(
         viewModelScope.launch {
             _callState.value = CallState.Calling
             try {
-                val callId = callRepository.startCall(calleeId, callerName, callerAvatar, type)
+                android.util.Log.d(TAG, "startCall() type=$type, calleeId=$calleeId")
+                val (callId, channelName) = callRepository.startCall(calleeId, callerName, callerAvatar, type)
+                android.util.Log.d(TAG, "startCall() got callId=$callId, channelName=$channelName")
                 currentCallId = callId
                 isCallee = false
-                initAgoraEngine(context, callId, type, isCallee = false)
-                if (type == "video") {
-                    // Thông báo cho UI biết channelName để join video với SurfaceView
-                    _readyToJoinVideo.value = callId
+                if (initAgoraEngine(context, channelName, type, isCallee = false)) {
+                    if (type == "video") {
+                        android.util.Log.d(TAG, "Setting readyToJoinVideo=$channelName")
+                        _readyToJoinVideo.value = channelName
+                    }
                 }
                 observeCallStatus(callId)
             } catch (e: Exception) {
+                android.util.Log.e(TAG, "startCall() error: ${e.message}", e)
                 _callState.value = CallState.Error(e.message ?: "Không thể tạo cuộc gọi")
             }
         }
@@ -128,13 +132,14 @@ class CallViewModel @Inject constructor(
         if (currentCallId != callId) {
             currentCallId = callId
             isCallee = true
+            val channelName = if (com.example.socialapp.BuildConfig.AGORA_TOKEN.isNotEmpty()) "test_channel" else callId
             _currentCallSignal.value = CallSignal(
                 id = callId,
                 callerId = callerId,
                 calleeId = callRepository.getCurrentUid(),
                 callerName = callerName,
                 callerAvatar = callerAvatar,
-                channelName = callId,
+                channelName = channelName,
                 type = type,
                 status = "ringing"
             )
@@ -145,17 +150,20 @@ class CallViewModel @Inject constructor(
     // ─── Callee: bắt máy ─────────────────────────────────────────────────────
     fun acceptCall(context: Context) {
         val signal = _currentCallSignal.value ?: return
+        android.util.Log.d(TAG, "acceptCall() channelName=${signal.channelName}, type=${signal.type}")
         viewModelScope.launch {
             try {
                 callRepository.acceptCall(currentCallId)
-                initAgoraEngine(context, signal.channelName, signal.type, isCallee = true)
-                // Với video, báo UI biết channelName để join với SurfaceView
-                if (signal.type == "video") {
-                    _readyToJoinVideo.value = signal.channelName
+                if (initAgoraEngine(context, signal.channelName, signal.type, isCallee = true)) {
+                    if (signal.type == "video") {
+                        android.util.Log.d(TAG, "Setting readyToJoinVideo=${signal.channelName}")
+                        _readyToJoinVideo.value = signal.channelName
+                    }
                 }
                 _callState.value = CallState.Connected
                 observeCallStatus(currentCallId)
             } catch (e: Exception) {
+                android.util.Log.e(TAG, "acceptCall() error: ${e.message}", e)
                 _callState.value = CallState.Error(e.message ?: "Lỗi kết nối")
             }
         }
@@ -220,43 +228,60 @@ class CallViewModel @Inject constructor(
         agoraManager.setupRemoteVideo(remoteView, uid)
     }
 
+    fun setupLocalVideo(localView: SurfaceView) {
+        agoraManager.setupLocalVideo(localView)
+    }
+
     // ─── Internal ─────────────────────────────────────────────────────────────
     private fun initAgoraEngine(
         context: Context,
         channelName: String,
         type: String,
         isCallee: Boolean
-    ) {
+    ): Boolean {
+        android.util.Log.d(TAG, "initAgoraEngine() channelName=$channelName, type=$type, isCallee=$isCallee")
         val handler = object : IRtcEngineEventHandler() {
+            // ... (giữ nguyên handler)
             override fun onJoinChannelSuccess(channel: String, uid: Int, elapsed: Int) {
-                if (!isCallee) _callState.value = CallState.Calling // Caller chờ callee
+                android.util.Log.d(TAG, "onJoinChannelSuccess channel=$channel, uid=$uid")
+                if (!isCallee) _callState.value = CallState.Calling 
             }
             override fun onUserJoined(uid: Int, elapsed: Int) {
+                android.util.Log.d(TAG, "onUserJoined uid=$uid")
                 _remoteUid.value = uid
                 _callState.value = CallState.Connected
                 agoraManager.setSpeaker(true)
             }
             override fun onUserOffline(uid: Int, reason: Int) {
+                android.util.Log.d(TAG, "onUserOffline uid=$uid, reason=$reason")
                 _remoteUid.value = null
                 _callState.value = CallState.Ended
             }
             override fun onError(err: Int) {
+                android.util.Log.e(TAG, "Agora onError: $err")
                 _callState.value = CallState.Error("Agora error: $err")
             }
         }
 
-        agoraManager.initEngine(handler)
+        val success = agoraManager.initEngine(handler)
+        android.util.Log.d(TAG, "initEngine result=$success")
+        
+        if (!success) {
+            _callState.value = CallState.Error("Lỗi khởi tạo Agora. Kiểm tra App ID!")
+            return false
+        }
 
         if (type == "video") {
-            // Video: joinVideoChannel yêu cầu local SurfaceView — gọi từ UI
-            // (điều phối thông qua _callState == Connected)
+            android.util.Log.d(TAG, "Video type: waiting for UI to call joinVideoWithView")
         } else {
             agoraManager.joinVoiceChannel(channelName)
             agoraManager.setSpeaker(true)
         }
+        return true
     }
 
     fun joinVideoWithView(localView: SurfaceView, channelName: String) {
+        android.util.Log.d(TAG, "joinVideoWithView() channelName=$channelName, engineInit=${agoraManager.isInitialized()}")
         agoraManager.joinVideoChannel(channelName, localView)
     }
 
@@ -288,6 +313,10 @@ class CallViewModel @Inject constructor(
         observeJob?.cancel()
         incomingCallJob?.cancel()
         agoraManager.destroy()
+    }
+
+    companion object {
+        private const val TAG = "CallViewModel"
     }
 }
 

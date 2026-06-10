@@ -1,6 +1,7 @@
 package com.example.socialapp.data.remote
 
 import android.content.Context
+import android.util.Log
 import android.view.SurfaceView
 import com.example.socialapp.BuildConfig
 import io.agora.rtc2.ChannelMediaOptions
@@ -9,37 +10,61 @@ import io.agora.rtc2.IRtcEngineEventHandler
 import io.agora.rtc2.RtcEngine
 import io.agora.rtc2.RtcEngineConfig
 import io.agora.rtc2.video.VideoCanvas
+import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class AgoraManager @Inject constructor(
-    private val context: Context
+    @ApplicationContext private val context: Context
 ) {
 
     private var engine: RtcEngine? = null
 
     /** Khởi tạo Agora engine với event handler */
     fun initEngine(eventHandler: IRtcEngineEventHandler): Boolean {
+        val appId = BuildConfig.AGORA_APP_ID.trim()
+        Log.d(TAG, "initEngine() - AppID: ${appId.take(4)}...${appId.takeLast(4)} (Length: ${appId.length})")
+        
+        if (appId.isEmpty()) {
+            Log.e(TAG, "AppID is EMPTY!")
+            return false
+        }
+
         return try {
-            engine?.let { it.leaveChannel(); RtcEngine.destroy() }
+            // Ép buộc nạp thư viện native của Agora trước (giúp sửa lỗi trên một số máy ảo)
+            try {
+                System.loadLibrary("agora-rtc-sdk")
+                Log.d(TAG, "Native library loaded successfully")
+            } catch (e: UnsatisfiedLinkError) {
+                Log.e(TAG, "Failed to load native library: ${e.message}")
+            }
+
+            // Xóa engine cũ nếu có
+            engine?.let {
+                RtcEngine.destroy()
+            }
             engine = null
 
-            val config = RtcEngineConfig().apply {
-                mContext = context
-                mAppId = BuildConfig.AGORA_APP_ID
-                mEventHandler = eventHandler
+            // Dùng hàm create đơn giản nhất để tối ưu khả năng tương thích
+            engine = RtcEngine.create(context, appId, eventHandler)
+            
+            if (engine == null) {
+                Log.e(TAG, "RtcEngine.create() still returns NULL!")
+                false
+            } else {
+                Log.d(TAG, "Engine created successfully!")
+                true
             }
-            engine = RtcEngine.create(config)
-            true
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e(TAG, "Exception during init: ${e.message}", e)
             false
         }
     }
 
     /** Tham gia channel thoại */
     fun joinVoiceChannel(channelName: String, uid: Int = 0) {
+        if (engine == null) return
         engine?.apply {
             enableAudio()
             disableVideo()
@@ -50,26 +75,32 @@ class AgoraManager @Inject constructor(
                 autoSubscribeAudio = true
                 autoSubscribeVideo = false
             }
-            joinChannel(null, channelName, uid, options)
+            val token = if (BuildConfig.AGORA_TOKEN.isNotEmpty()) BuildConfig.AGORA_TOKEN else null
+            joinChannel(token, channelName, uid, options)
         }
     }
 
     /** Tham gia channel video */
     fun joinVideoChannel(channelName: String, localView: SurfaceView, uid: Int = 0) {
+        if (engine == null) return
         engine?.apply {
             enableAudio()
             enableVideo()
             setupLocalVideo(VideoCanvas(localView, VideoCanvas.RENDER_MODE_HIDDEN, 0))
             startPreview()
-            val options = ChannelMediaOptions().apply {
-                clientRoleType = Constants.CLIENT_ROLE_BROADCASTER
-                channelProfile = Constants.CHANNEL_PROFILE_COMMUNICATION
-                publishMicrophoneTrack = true
-                publishCameraTrack = true
-                autoSubscribeAudio = true
-                autoSubscribeVideo = true
+            
+            if (channelName.isNotEmpty()) {
+                val options = ChannelMediaOptions().apply {
+                    clientRoleType = Constants.CLIENT_ROLE_BROADCASTER
+                    channelProfile = Constants.CHANNEL_PROFILE_COMMUNICATION
+                    publishMicrophoneTrack = true
+                    publishCameraTrack = true
+                    autoSubscribeAudio = true
+                    autoSubscribeVideo = true
+                }
+                val token = if (BuildConfig.AGORA_TOKEN.isNotEmpty()) BuildConfig.AGORA_TOKEN else null
+                joinChannel(token, channelName, uid, options)
             }
-            joinChannel(null, channelName, uid, options)
         }
     }
 
@@ -80,14 +111,17 @@ class AgoraManager @Inject constructor(
         )
     }
 
+    /** Setup video cho local user */
+    fun setupLocalVideo(localView: SurfaceView) {
+        engine?.setupLocalVideo(
+            VideoCanvas(localView, VideoCanvas.RENDER_MODE_HIDDEN, 0)
+        )
+    }
+
     fun muteAudio(muted: Boolean) { engine?.muteLocalAudioStream(muted) }
-
     fun muteVideo(muted: Boolean) { engine?.muteLocalVideoStream(muted) }
-
     fun switchCamera() { engine?.switchCamera() }
-
     fun setSpeaker(on: Boolean) { engine?.setEnableSpeakerphone(on) }
-
     fun leaveChannel() { engine?.leaveChannel() }
 
     fun destroy() {
@@ -99,5 +133,8 @@ class AgoraManager @Inject constructor(
     }
 
     fun isInitialized(): Boolean = engine != null
-}
 
+    companion object {
+        private const val TAG = "AgoraManager"
+    }
+}

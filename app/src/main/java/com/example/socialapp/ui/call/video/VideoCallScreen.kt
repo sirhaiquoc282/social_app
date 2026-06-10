@@ -46,13 +46,14 @@ fun VideoCallScreen(
     val isCamMuted by viewModel.isCamMuted.collectAsState()
     val remoteUid by viewModel.remoteUid.collectAsState()
     val readyToJoinVideo by viewModel.readyToJoinVideo.collectAsState()
-    var permissionGranted by remember { mutableStateOf(false) }
+    var permissionGranted by remember { 
+        mutableStateOf(com.example.socialapp.util.PermissionHelper.hasVideoPermissions(context)) 
+    }
 
-    val localSurfaceView = remember { SurfaceView(context) }
+    val localSurfaceView = remember { SurfaceView(context).apply { setZOrderMediaOverlay(true) } }
     val remoteSurfaceView = remember { SurfaceView(context) }
-    // Flag: SurfaceView đã được render và attach vào window
-    var localViewReady by remember { mutableStateOf(false) }
 
+    // Xin quyền Camera/Mic
     com.example.socialapp.ui.call.RequestCallPermissions(
         callType = "video",
         onGranted = { permissionGranted = true },
@@ -61,6 +62,7 @@ fun VideoCallScreen(
         LaunchedEffect(Unit) { requestPermission() }
     }
 
+    // Kết thúc cuộc gọi khi trạng thái thay đổi
     LaunchedEffect(callState) {
         when (callState) {
             is CallState.Ended, is CallState.Declined -> onCallEnded()
@@ -68,20 +70,11 @@ fun VideoCallScreen(
         }
     }
 
-    // Caller & Callee: join video chỉ khi CẢ BA điều kiện đều đúng:
-    // 1. permission được cấp
-    // 2. readyToJoinVideo có giá trị (engine đã init)
-    // 3. localViewReady = true (SurfaceView đã attach vào window)
-    LaunchedEffect(readyToJoinVideo, permissionGranted, localViewReady) {
-        val channelName = readyToJoinVideo ?: return@LaunchedEffect
-        if (permissionGranted && localViewReady) {
-            viewModel.joinVideoWithView(localSurfaceView, channelName)
-        }
-    }
-
+    // Bắt đầu cuộc gọi SAU KHI đã có quyền
     LaunchedEffect(permissionGranted, callState) {
         if (!permissionGranted) return@LaunchedEffect
         if (!isCallee && callId == "new" && callState is CallState.Idle) {
+            // Caller: tạo cuộc gọi → initEngine → set readyToJoinVideo
             viewModel.startCall(
                 context = context,
                 calleeId = calleeId,
@@ -92,9 +85,18 @@ fun VideoCallScreen(
                 type = "video"
             )
         } else if (isCallee && callState is CallState.Ringing) {
+            // Callee: bắt máy → initEngine → set readyToJoinVideo
             viewModel.prepareCallAsCallee(callId, calleeId, calleeName, calleeAvatar, "video")
             viewModel.acceptCall(context)
-            // joinVideoWithView sẽ được trigger tự động qua readyToJoinVideo
+        }
+    }
+
+    // CHỈ join video channel SAU KHI engine đã init xong VÀ có channelName
+    LaunchedEffect(readyToJoinVideo, permissionGranted) {
+        val channelName = readyToJoinVideo ?: return@LaunchedEffect
+        if (permissionGranted && channelName.isNotEmpty()) {
+            android.util.Log.d("VideoCallScreen", "Joining video channel: $channelName")
+            viewModel.joinVideoWithView(localSurfaceView, channelName)
         }
     }
 
@@ -167,13 +169,18 @@ fun VideoCallScreen(
                     .background(Color.DarkGray)
             ) {
                 AndroidView(
-                    factory = { localSurfaceView.apply {
-                        layoutParams = ViewGroup.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT,
-                            ViewGroup.LayoutParams.MATCH_PARENT
-                        )
-                    }},
-                    update = { localViewReady = true },
+                    factory = { 
+                        localSurfaceView.apply {
+                            layoutParams = ViewGroup.LayoutParams(
+                                ViewGroup.LayoutParams.MATCH_PARENT,
+                                ViewGroup.LayoutParams.MATCH_PARENT
+                            )
+                        }
+                    },
+                    update = { view ->
+                        // Ép Agora render lại vào view này mỗi khi UI cập nhật
+                        viewModel.setupLocalVideo(view)
+                    },
                     modifier = Modifier.fillMaxSize()
                 )
             }

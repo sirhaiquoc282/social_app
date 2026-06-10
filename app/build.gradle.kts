@@ -1,19 +1,18 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.compose.compiler)
-    //id("com.google.gms.google-services")
     id("com.google.dagger.hilt.android")
     id("org.jetbrains.kotlin.kapt")
-
-    // Add the Google services Gradle plugin
     id("com.google.gms.google-services")
-
 }
 
 android {
     namespace = "com.example.socialapp"
-    compileSdk = 35   // dùng android-35 (có trên máy)
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.example.socialapp"
@@ -24,8 +23,22 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        val agoraAppId = project.findProperty("AGORA_APP_ID")?.toString() ?: ""
+        // Hỗ trợ máy ảo x86_64
+        ndk {
+            abiFilters.add("arm64-v8a")
+            abiFilters.add("armeabi-v7a")
+            abiFilters.add("x86_64")
+        }
+
+        val localProperties = Properties()
+        val localPropertiesFile = rootProject.file("local.properties")
+        if (localPropertiesFile.exists()) {
+            localProperties.load(FileInputStream(localPropertiesFile))
+        }
+        val agoraAppId = localProperties.getProperty("AGORA_APP_ID") ?: project.findProperty("AGORA_APP_ID")?.toString() ?: ""
+        val agoraToken = localProperties.getProperty("AGORA_TOKEN") ?: project.findProperty("AGORA_TOKEN")?.toString() ?: ""
         buildConfigField("String", "AGORA_APP_ID", "\"$agoraAppId\"")
+        buildConfigField("String", "AGORA_TOKEN", "\"$agoraToken\"")
     }
 
     buildTypes {
@@ -103,17 +116,8 @@ dependencies {
 
     // Agora RTC
     implementation(libs.agora.rtc)
-
-    // TODO: Add the dependencies for Firebase products you want to use
-    // When using the BoM, don't specify versions in Firebase dependencies
-
-
-
-    // Add the dependencies for any other desired Firebase products
-    // https://firebase.google.com/docs/android/setup#available-libraries
 }
 
 kapt {
     correctErrorTypes = true
 }
-
