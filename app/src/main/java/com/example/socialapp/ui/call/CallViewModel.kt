@@ -74,6 +74,15 @@ class CallViewModel @Inject constructor(
                     currentCallId = signal.id
                     isCallee = true
                     _callState.value = CallState.Ringing
+                    // Bắt đầu observe trạng thái cuộc gọi này
+                    // để phát hiện khi caller hủy cuộc gọi
+                    observeCallStatus(signal.id)
+                } else if (signal == null && _callState.value == CallState.Ringing && isCallee) {
+                    // Caller đã hủy cuộc gọi (status không còn "ringing")
+                    // → reset trạng thái về Idle
+                    android.util.Log.d(TAG, "Incoming call cancelled by caller")
+                    _callState.value = CallState.Ended
+                    resetAfterCall()
                 }
             }
         }
@@ -151,6 +160,11 @@ class CallViewModel @Inject constructor(
     fun acceptCall(context: Context) {
         val signal = _currentCallSignal.value ?: return
         android.util.Log.d(TAG, "acceptCall() channelName=${signal.channelName}, type=${signal.type}")
+        
+        // Cập nhật state ngay lập tức để khi update Firestore ("accepted"),
+        // observeIncomingCall nhận signal = null sẽ không bị nhầm là caller cancel (do state không còn là Ringing).
+        _callState.value = CallState.Connected
+        
         viewModelScope.launch {
             try {
                 callRepository.acceptCall(currentCallId)
@@ -160,7 +174,6 @@ class CallViewModel @Inject constructor(
                         _readyToJoinVideo.value = signal.channelName
                     }
                 }
-                _callState.value = CallState.Connected
                 observeCallStatus(currentCallId)
             } catch (e: Exception) {
                 android.util.Log.e(TAG, "acceptCall() error: ${e.message}", e)
@@ -189,6 +202,8 @@ class CallViewModel @Inject constructor(
     }
 
     private fun resetAfterCall() {
+        observeJob?.cancel()
+        incomingCallJob?.cancel()
         currentCallId = ""
         isCallee = false
         _currentCallSignal.value = null

@@ -10,9 +10,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.socialapp.ui.calls.CallsScreen
 import com.example.socialapp.ui.contacts.ContactsScreen
 import com.example.socialapp.ui.home.HomeScreen
+import com.example.socialapp.ui.home.HomeViewModel
 import com.example.socialapp.ui.settings.SettingsScreen
 import com.example.socialapp.ui.theme.*
 
@@ -35,6 +37,10 @@ fun MainScreen(
 ) {
     var selectedIndex by remember { mutableIntStateOf(0) }
 
+    // Lấy HomeViewModel ở đây để share giữa HomeScreen và bottom bar
+    val homeViewModel: HomeViewModel = hiltViewModel()
+    val unreadCount by homeViewModel.unreadCount.collectAsState()
+
     Scaffold(
         containerColor = DarkBg,
         bottomBar = {
@@ -47,10 +53,32 @@ fun MainScreen(
                         selected = selectedIndex == index,
                         onClick = { selectedIndex = index },
                         icon = {
-                            Icon(
-                                item.icon,
-                                contentDescription = item.label
-                            )
+                            // Badge cho tab Message khi có tin nhắn chưa đọc
+                            if (index == 0 && unreadCount > 0) {
+                                BadgedBox(
+                                    badge = {
+                                        Badge(
+                                            containerColor = MissedRed,
+                                            contentColor = White
+                                        ) {
+                                            Text(
+                                                if (unreadCount > 99) "99+" else unreadCount.toString(),
+                                                style = MaterialTheme.typography.labelSmall
+                                            )
+                                        }
+                                    }
+                                ) {
+                                    Icon(
+                                        item.icon,
+                                        contentDescription = item.label
+                                    )
+                                }
+                            } else {
+                                Icon(
+                                    item.icon,
+                                    contentDescription = item.label
+                                )
+                            }
                         },
                         label = { Text(item.label, style = MaterialTheme.typography.labelSmall) },
                         colors = NavigationBarItemDefaults.colors(
@@ -70,7 +98,8 @@ fun MainScreen(
                 0 -> HomeScreen(
                     onNavigateToChat = onNavigateToChat,
                     onNavigateToVoiceCall = onNavigateToVoiceCall,
-                    onNavigateToVideoCall = onNavigateToVideoCall
+                    onNavigateToVideoCall = onNavigateToVideoCall,
+                    viewModel = homeViewModel
                 )
                 1 -> CallsScreen(
                     onNavigateToVoiceCall = { calleeId, calleeName, calleeAvatar ->

@@ -38,6 +38,13 @@ class HomeViewModel @Inject constructor(
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
+    private val _incomingNotification = MutableStateFlow<Conversation?>(null)
+    val incomingNotification: StateFlow<Conversation?> = _incomingNotification.asStateFlow()
+
+    /** Số cuộc hội thoại chưa đọc — dùng để hiển thị badge trên bottom navigation */
+    private val _unreadCount = MutableStateFlow(0)
+    val unreadCount: StateFlow<Int> = _unreadCount.asStateFlow()
+
     private var lastConvs: List<Conversation> = emptyList()
 
     init {
@@ -80,6 +87,11 @@ class HomeViewModel @Inject constructor(
                     // Xử lý thông báo tin nhắn mới
                     checkNewMessages(enriched)
 
+                    // Cập nhật unread count dùng per-user readBy
+                    _unreadCount.value = enriched.count { conv ->
+                        conv.lastSenderId != uid && !conv.isReadBy(uid)
+                    }
+
                     _conversations.value = enriched
                     _isLoading.value = false
                     lastConvs = enriched
@@ -88,6 +100,8 @@ class HomeViewModel @Inject constructor(
     }
 
     private fun checkNewMessages(newConvs: List<Conversation>) {
+        val uid = getCurrentUid()
+        
         // Log để debug xem hàm có được chạy không
         android.util.Log.d("HomeViewModel", "Checking new messages. Count: ${newConvs.size}")
         
@@ -100,13 +114,22 @@ class HomeViewModel @Inject constructor(
             val oldConv = lastConvs.find { it.id == newConv.id }
             
             // Log chi tiết từng conversation
-            android.util.Log.d("HomeViewModel", "Conv ${newConv.id}: isRead=${newConv.isRead}, lastSender=${newConv.lastSenderId}")
+            android.util.Log.d("HomeViewModel", "Conv ${newConv.id}: isReadBy($uid)=${newConv.isReadBy(uid)}, lastSender=${newConv.lastSenderId}")
 
-            // Nếu có tin nhắn mới từ người khác và chưa đọc
-            if (newConv.lastSenderId != getCurrentUid() && !newConv.isRead) {
+            // Nếu có tin nhắn mới từ người khác và chưa đọc (per-user)
+            if (newConv.lastSenderId != uid && !newConv.isReadBy(uid)) {
                 // Kiểm tra xem tin nhắn có thực sự mới hơn cái cũ không
                 if (oldConv == null || newConv.lastMessageAt != oldConv.lastMessageAt) {
                     android.util.Log.d("HomeViewModel", "SHOWING NOTIFICATION for ${newConv.otherUserName}")
+                    
+                    _incomingNotification.value = newConv
+                    viewModelScope.launch {
+                        kotlinx.coroutines.delay(4000)
+                        if (_incomingNotification.value?.id == newConv.id) {
+                            _incomingNotification.value = null
+                        }
+                    }
+
                     NotificationHelper.showToast(context, "Bạn có tin nhắn mới từ ${newConv.otherUserName}")
                     NotificationHelper.showLocalNotification(
                         context, 
@@ -118,10 +141,13 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    fun dismissNotification() {
+        _incomingNotification.value = null
+    }
+
     fun logout() {
         viewModelScope.launch { authRepository.logout() }
     }
 
     fun getCurrentUid(): String = authRepository.currentUser?.uid ?: ""
 }
-

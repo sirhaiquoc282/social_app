@@ -71,15 +71,6 @@ fun VoiceCallScreen(
                     .currentUser?.photoUrl?.toString() ?: "",
                 type = "voice"
             )
-        } else if (isCallee && callState is CallState.Ringing) {
-            viewModel.prepareCallAsCallee(
-                callId = callId,
-                callerId = calleeId,
-                callerName = calleeName,
-                callerAvatar = calleeAvatar,
-                type = "voice"
-            )
-            viewModel.acceptCall(context)
         }
     }
 

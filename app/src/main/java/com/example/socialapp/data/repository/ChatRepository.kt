@@ -51,7 +51,11 @@ class ChatRepository @Inject constructor(
                     "lastMessage" to text,
                     "lastMessageAt" to FieldValue.serverTimestamp(),
                     "lastSenderId" to currentUid,
-                    "isRead" to false // Đánh dấu chưa đọc
+                    // Per-user read tracking: người gửi = đã đọc, người nhận = chưa đọc
+                    "readBy" to mapOf(
+                        currentUid to true,
+                        otherUid to false
+                    )
                 ),
                 SetOptions.merge()
             )
@@ -71,25 +75,33 @@ class ChatRepository @Inject constructor(
                     doc.toObject(Message::class.java)?.copy(id = doc.id)
                 } ?: emptyList()
                 
-                // Mỗi khi có tin nhắn mới trong khi đang mở màn hình chat, đánh dấu đã đọc
+                // Mỗi khi có tin nhắn mới trong khi đang mở màn hình chat, đánh dấu đã đọc cho current user
                 if (messages.isNotEmpty() && messages.last().senderId != currentUid) {
-                    firestore.collection("conversations").document(convId).update("isRead", true)
+                    markConversationReadForUser(convId, currentUid)
                 }
                 
                 trySend(messages)
             }
         
         // Đánh dấu đã đọc ngay khi vừa mở chat
-        markConversationRead(convId)
+        markConversationReadForUser(convId, currentUid)
         
         awaitClose { listener.remove() }
     }
 
-    /** Đánh dấu cuộc hội thoại đã đọc */
+    /** Đánh dấu cuộc hội thoại đã đọc cho user cụ thể (non-suspend, fire-and-forget) */
+    private fun markConversationReadForUser(convId: String, uid: String) {
+        try {
+            firestore.collection("conversations").document(convId)
+                .update("readBy.$uid", true)
+        } catch (_: Exception) {}
+    }
+
+    /** Đánh dấu cuộc hội thoại đã đọc (suspend version) */
     suspend fun markConversationRead(convId: String) {
         try {
             firestore.collection("conversations").document(convId)
-                .update("isRead", true).await()
+                .update("readBy.$currentUid", true).await()
         } catch (_: Exception) {}
     }
 
@@ -121,4 +133,3 @@ class ChatRepository @Inject constructor(
         } catch (_: Exception) {}
     }
 }
-

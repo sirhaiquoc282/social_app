@@ -1,6 +1,8 @@
 package com.example.socialapp.ui.chat
 
+import androidx.compose.animation.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -17,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -41,6 +44,7 @@ fun ChatScreen(
 ) {
     val messages by viewModel.messages.collectAsState()
     val inputText by viewModel.inputText.collectAsState()
+    val newNotification by viewModel.newNotification.collectAsState()
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val currentUid = remember { FirebaseAuth.getInstance().currentUser?.uid ?: "" }
@@ -53,107 +57,157 @@ fun ChatScreen(
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(DarkBg)
-    ) {
-        // Top bar
-        Box(
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .background(ChatboxTeal)
-                .statusBarsPadding()
+                .fillMaxSize()
+                .background(DarkBg)
         ) {
-            Row(
+            // Top bar
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 4.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .background(ChatboxTeal)
+                    .statusBarsPadding()
             ) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = White)
-                }
-
-                Box(
+                Row(
                     modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(ChatboxTealDark),
-                    contentAlignment = Alignment.Center
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (otherAvatar.isNotBlank()) {
-                        AsyncImage(model = otherAvatar, contentDescription = null,
-                            modifier = Modifier.fillMaxSize())
-                    } else {
-                        Text(otherName.firstOrNull()?.uppercase() ?: "?",
-                            color = White, fontWeight = FontWeight.Bold)
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = White)
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(ChatboxTealDark),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (otherAvatar.isNotBlank()) {
+                            AsyncImage(model = otherAvatar, contentDescription = null,
+                                modifier = Modifier.fillMaxSize())
+                        } else {
+                            Text(otherName.firstOrNull()?.uppercase() ?: "?",
+                                color = White, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    Spacer(Modifier.width(10.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(otherName, color = White, fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.bodyLarge)
+                        Text("Active now", color = White.copy(alpha = 0.75f),
+                            style = MaterialTheme.typography.bodySmall)
+                    }
+
+                    IconButton(onClick = {
+                        onNavigateToVoiceCall("new", otherUid, otherName, otherAvatar)
+                    }) {
+                        Icon(Icons.Default.Call, null, tint = White)
+                    }
+                    IconButton(onClick = {
+                        onNavigateToVideoCall("new", otherUid, otherName, otherAvatar)
+                    }) {
+                        Icon(Icons.Default.Videocam, null, tint = White)
                     }
                 }
+            }
 
-                Spacer(Modifier.width(10.dp))
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(otherName, color = White, fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.bodyLarge)
-                    Text("Active now", color = White.copy(alpha = 0.75f),
-                        style = MaterialTheme.typography.bodySmall)
+            // Message list
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .background(DarkBg)
+                    .padding(horizontal = 12.dp),
+                contentPadding = PaddingValues(vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                if (messages.isNotEmpty()) {
+                    item {
+                        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                            Surface(
+                                color = DarkSurface,
+                                shape = RoundedCornerShape(20.dp)
+                            ) {
+                                Text(
+                                    "Today",
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                                    color = TextSecondary,
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            }
+                        }
+                    }
                 }
-
-                IconButton(onClick = {
-                    onNavigateToVoiceCall("new", otherUid, otherName, otherAvatar)
-                }) {
-                    Icon(Icons.Default.Call, null, tint = White)
-                }
-                IconButton(onClick = {
-                    onNavigateToVideoCall("new", otherUid, otherName, otherAvatar)
-                }) {
-                    Icon(Icons.Default.Videocam, null, tint = White)
+                items(messages) { message ->
+                    MessageBubble(message = message, isMine = message.senderId == currentUid,
+                        otherName = otherName, otherAvatar = otherAvatar)
                 }
             }
+
+            // Input bar
+            ChatInputBar(
+                text = inputText,
+                onTextChange = { viewModel.setInputText(it) },
+                onSend = { viewModel.sendMessage() }
+            )
         }
 
-        // Message list
-        LazyColumn(
-            state = listState,
+        // --- Notification Banner for other messages ---
+        AnimatedVisibility(
+            visible = newNotification != null,
+            enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+            exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
             modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .background(DarkBg)
-                .padding(horizontal = 12.dp),
-            contentPadding = PaddingValues(vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+                .align(Alignment.TopCenter)
+                .statusBarsPadding()
+                .padding(top = 60.dp) // Below the top bar
+                .padding(horizontal = 16.dp)
         ) {
-            // Date separator
-            if (messages.isNotEmpty()) {
-                item {
-                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        Surface(
-                            color = DarkSurface,
-                            shape = RoundedCornerShape(20.dp)
-                        ) {
+            newNotification?.let { conv ->
+                Surface(
+                    color = ChatboxTealAccent,
+                    shape = RoundedCornerShape(12.dp),
+                    shadowElevation = 8.dp,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { viewModel.dismissNotification() }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.ChatBubble, null, tint = White, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                "Today",
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                                color = TextSecondary,
+                                "Tin nhắn mới từ ${conv.otherUserName}",
+                                color = White,
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                            Text(
+                                conv.lastMessage,
+                                color = White.copy(alpha = 0.9f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                                 style = MaterialTheme.typography.labelSmall
                             )
+                        }
+                        IconButton(onClick = { viewModel.dismissNotification() }) {
+                            Icon(Icons.Default.Close, null, tint = White, modifier = Modifier.size(16.dp))
                         }
                     }
                 }
             }
-            items(messages) { message ->
-                MessageBubble(message = message, isMine = message.senderId == currentUid,
-                    otherName = otherName, otherAvatar = otherAvatar)
-            }
         }
-
-        // Input bar
-        ChatInputBar(
-            text = inputText,
-            onTextChange = { viewModel.setInputText(it) },
-            onSend = { viewModel.sendMessage() }
-        )
     }
 }
 

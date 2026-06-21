@@ -2,6 +2,7 @@ package com.example.socialapp.ui.chat
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.socialapp.data.model.Conversation
 import com.example.socialapp.data.model.Message
 import com.example.socialapp.data.repository.ChatRepository
 import com.google.firebase.auth.FirebaseAuth
@@ -33,9 +34,14 @@ class ChatViewModel @Inject constructor(
     private val _inputText = MutableStateFlow("")
     val inputText: StateFlow<String> = _inputText.asStateFlow()
 
-    private var currentOtherUid: String = ""
+    private val _newNotification = MutableStateFlow<Conversation?>(null)
+    val newNotification: StateFlow<Conversation?> = _newNotification.asStateFlow()
 
+    private var currentOtherUid: String = ""
     private var messagesJob: kotlinx.coroutines.Job? = null
+    private var allConvsJob: kotlinx.coroutines.Job? = null
+    private var initialConvsLoaded = false
+    private var lastKnownConvs: List<Conversation> = emptyList()
 
     fun loadMessages(otherUid: String) {
         if (currentOtherUid == otherUid && messagesJob?.isActive == true) return
@@ -51,6 +57,45 @@ class ChatViewModel @Inject constructor(
                     _uiState.value = ChatUiState.Idle
                 }
         }
+
+        observeOtherConversations()
+    }
+
+    private fun observeOtherConversations() {
+        allConvsJob?.cancel()
+        val uid = getCurrentUserId()
+        allConvsJob = viewModelScope.launch {
+            chatRepository.observeConversations().collect { convs ->
+                if (!initialConvsLoaded) {
+                    lastKnownConvs = convs
+                    initialConvsLoaded = true
+                    return@collect
+                }
+
+                convs.forEach { conv ->
+                    val otherId = conv.participants.firstOrNull { it != uid } ?: ""
+                    // Nếu là tin nhắn mới từ người KHÁC (không phải người đang chat cùng)
+                    if (otherId != currentOtherUid && conv.lastSenderId != uid && !conv.isReadBy(uid)) {
+                        val oldConv = lastKnownConvs.find { it.id == conv.id }
+                        if (oldConv == null || conv.lastMessageAt != oldConv.lastMessageAt) {
+                            _newNotification.value = conv
+                            // Tự động xóa thông báo sau 3 giây
+                            viewModelScope.launch {
+                                kotlinx.coroutines.delay(3000)
+                                if (_newNotification.value?.id == conv.id) {
+                                    _newNotification.value = null
+                                }
+                            }
+                        }
+                    }
+                }
+                lastKnownConvs = convs
+            }
+        }
+    }
+
+    fun dismissNotification() {
+        _newNotification.value = null
     }
 
     fun setInputText(text: String) {
@@ -69,4 +114,3 @@ class ChatViewModel @Inject constructor(
 
     fun getCurrentUserId(): String = FirebaseAuth.getInstance().currentUser?.uid ?: ""
 }
-

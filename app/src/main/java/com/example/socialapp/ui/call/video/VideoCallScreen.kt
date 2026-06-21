@@ -84,10 +84,6 @@ fun VideoCallScreen(
                     .currentUser?.photoUrl?.toString() ?: "",
                 type = "video"
             )
-        } else if (isCallee && callState is CallState.Ringing) {
-            // Callee: bắt máy → initEngine → set readyToJoinVideo
-            viewModel.prepareCallAsCallee(callId, calleeId, calleeName, calleeAvatar, "video")
-            viewModel.acceptCall(context)
         }
     }
 

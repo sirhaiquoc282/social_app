@@ -9,6 +9,14 @@ import com.example.socialapp.ui.call.voice.VoiceCallScreen
 import com.example.socialapp.ui.call.video.VideoCallScreen
 import com.example.socialapp.ui.theme.SocialAppTheme
 import dagger.hilt.android.AndroidEntryPoint
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.core.app.NotificationManagerCompat
+import com.example.socialapp.service.MyFirebaseMessagingService
+import com.example.socialapp.ui.call.CallState
+import com.example.socialapp.ui.call.CallViewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 
 /**
  * Activity hiển thị màn hình cuộc gọi đến từ FCM notification.
@@ -29,6 +37,27 @@ class IncomingCallActivity : ComponentActivity() {
 
         setContent {
             SocialAppTheme {
+                val viewModel: CallViewModel = hiltViewModel()
+                val callState by viewModel.callState.collectAsState()
+
+                LaunchedEffect(Unit) {
+                    viewModel.prepareCallAsCallee(
+                        callId = callId,
+                        callerId = callerId,
+                        callerName = callerName,
+                        callerAvatar = callerAvatar,
+                        type = callType
+                    )
+                    viewModel.startObservingIncomingCalls()
+                }
+
+                LaunchedEffect(callState) {
+                    if (callState is CallState.Ended || callState is CallState.Declined) {
+                        NotificationManagerCompat.from(this@IncomingCallActivity).cancel(MyFirebaseMessagingService.CALL_NOTIFICATION_ID)
+                        finish()
+                    }
+                }
+
                 if (callType == "video") {
                     VideoCallScreen(
                         callId = callId,
@@ -36,7 +65,8 @@ class IncomingCallActivity : ComponentActivity() {
                         calleeName = callerName,
                         calleeAvatar = callerAvatar,
                         isCallee = true,
-                        onCallEnded = { finish() }
+                        onCallEnded = { finish() },
+                        viewModel = viewModel
                     )
                 } else {
                     VoiceCallScreen(
@@ -45,7 +75,8 @@ class IncomingCallActivity : ComponentActivity() {
                         calleeName = callerName,
                         calleeAvatar = callerAvatar,
                         isCallee = true,
-                        onCallEnded = { finish() }
+                        onCallEnded = { finish() },
+                        viewModel = viewModel
                     )
                 }
             }
