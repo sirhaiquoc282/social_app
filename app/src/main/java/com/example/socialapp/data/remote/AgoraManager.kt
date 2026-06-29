@@ -21,11 +21,14 @@ class AgoraManager @Inject constructor(
 
     private var engine: RtcEngine? = null
 
+    // Dùng Object Lock để đảm bảo destroy() chạy xong trước khi initEngine() tạo engine mới
+    private val engineLock = Object()
+
     /** Khởi tạo Agora engine với event handler */
     fun initEngine(eventHandler: IRtcEngineEventHandler): Boolean {
         val appId = BuildConfig.AGORA_APP_ID.trim()
         Log.d(TAG, "initEngine() - AppID: ${appId.take(4)}...${appId.takeLast(4)} (Length: ${appId.length})")
-        
+
         if (appId.isEmpty()) {
             Log.e(TAG, "AppID is EMPTY!")
             return false
@@ -40,15 +43,26 @@ class AgoraManager @Inject constructor(
                 Log.e(TAG, "Failed to load native library: ${e.message}")
             }
 
-            // Xóa engine cũ nếu có
-            engine?.let {
-                RtcEngine.destroy()
-            }
-            engine = null
+            // QUAN TRỌNG: Dùng synchronized để chờ destroy() cũ chạy xong (nếu có)
+            synchronized(engineLock) {
+                // Xóa engine cũ nếu có (đồng bộ, không chạy ngầm)
+                engine?.let {
+                    Log.d(TAG, "Destroying old engine before creating new one...")
+                    it.setupLocalVideo(VideoCanvas(null))
+                    it.stopPreview()
+                    it.disableVideo()
+                    it.disableAudio()
+                    it.leaveChannel()
+                    RtcEngine.destroy()
+                    engine = null
+                    // Chờ Agora native layer dọn dẹp xong
+                    Thread.sleep(200)
+                }
 
-            // Dùng hàm create đơn giản nhất để tối ưu khả năng tương thích
-            engine = RtcEngine.create(context, appId, eventHandler)
-            
+                // Tạo engine mới
+                engine = RtcEngine.create(context, appId, eventHandler)
+            }
+
             if (engine == null) {
                 Log.e(TAG, "RtcEngine.create() still returns NULL!")
                 false
@@ -88,7 +102,7 @@ class AgoraManager @Inject constructor(
             enableVideo()
             setupLocalVideo(VideoCanvas(localView, VideoCanvas.RENDER_MODE_HIDDEN, 0))
             startPreview()
-            
+
             if (channelName.isNotEmpty()) {
                 val options = ChannelMediaOptions().apply {
                     clientRoleType = Constants.CLIENT_ROLE_BROADCASTER
@@ -122,14 +136,40 @@ class AgoraManager @Inject constructor(
     fun muteVideo(muted: Boolean) { engine?.muteLocalVideoStream(muted) }
     fun switchCamera() { engine?.switchCamera() }
     fun setSpeaker(on: Boolean) { engine?.setEnableSpeakerphone(on) }
-    fun leaveChannel() { engine?.leaveChannel() }
 
-    fun destroy() {
-        engine?.let {
-            it.leaveChannel()
-            RtcEngine.destroy()
+    /**
+     * Rời khỏi channel hiện tại nhưng GIỮ engine lại (để tái sử dụng nhanh cho cuộc gọi kế tiếp).
+     * Tắt hết Camera, Mic, Preview để trả lại tài nguyên phần cứng cho hệ điều hành.
+     */
+    fun leaveChannel() {
+        engine?.apply {
+            setupLocalVideo(VideoCanvas(null))  // Gỡ tham chiếu SurfaceView
+            leaveChannel()
+            stopPreview()
+            disableVideo()
+            disableAudio()
         }
-        engine = null
+        Log.d(TAG, "leaveChannel() completed - engine kept alive for reuse")
+    }
+
+    /**
+     * Phá hủy hoàn toàn engine. Chỉ dùng khi ViewModel bị hủy (onCleared).
+     * ĐỒNG BỘ (synchronous) - chạy trên luồng hiện tại để đảm bảo dọn dẹp xong 100%.
+     */
+    fun destroy() {
+        synchronized(engineLock) {
+            engine?.let {
+                Log.d(TAG, "destroy() - releasing all resources...")
+                it.setupLocalVideo(VideoCanvas(null))
+                it.stopPreview()
+                it.disableVideo()
+                it.disableAudio()
+                it.leaveChannel()
+                RtcEngine.destroy()
+                Log.d(TAG, "destroy() - RtcEngine destroyed successfully")
+            }
+            engine = null
+        }
     }
 
     fun isInitialized(): Boolean = engine != null

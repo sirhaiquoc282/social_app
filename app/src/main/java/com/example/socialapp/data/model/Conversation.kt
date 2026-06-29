@@ -1,6 +1,7 @@
 package com.example.socialapp.data.model
 
 import com.google.firebase.Timestamp
+import com.google.firebase.firestore.PropertyName
 
 data class Conversation(
     val id: String = "",
@@ -8,7 +9,10 @@ data class Conversation(
     val lastMessage: String = "",
     val lastMessageAt: Timestamp? = null,
     val lastSenderId: String = "",
-    val isRead: Boolean = true, // Deprecated: giữ lại để backward compat
+    
+    @get:PropertyName("isRead")
+    @set:PropertyName("isRead")
+    var isRead: Boolean = true, // Deprecated: giữ lại để backward compat
     val readBy: Map<String, Boolean> = emptyMap(), // Per-user read tracking: {uid: true/false}
     // Runtime only — populated from /users/
     val otherUserName: String = "",

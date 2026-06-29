@@ -1,6 +1,8 @@
 package com.example.socialapp.ui.navigation
 
+import androidx.activity.ComponentActivity
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -10,6 +12,7 @@ import androidx.navigation.navArgument
 import com.example.socialapp.ui.auth.AuthViewModel
 import com.example.socialapp.ui.auth.LoginScreen
 import com.example.socialapp.ui.auth.RegisterScreen
+import com.example.socialapp.ui.call.CallViewModel
 import com.example.socialapp.ui.call.video.VideoCallScreen
 import com.example.socialapp.ui.call.voice.VoiceCallScreen
 import com.example.socialapp.ui.chat.ChatScreen
@@ -24,6 +27,11 @@ import java.nio.charset.StandardCharsets
 fun SocialAppNavGraph() {
     val navController = rememberNavController()
     val authViewModel: AuthViewModel = hiltViewModel()
+
+    // CallViewModel được scope theo Activity → listener sống cùng Activity,
+    // không bị hủy khi chuyển tab hoặc navigate giữa các màn hình
+    val activity = LocalContext.current as ComponentActivity
+    val callViewModel: CallViewModel = hiltViewModel(activity)
 
     fun decode(s: String?): String =
         URLDecoder.decode(s ?: "none", StandardCharsets.UTF_8.toString())
@@ -105,7 +113,8 @@ fun SocialAppNavGraph() {
                     navController.navigate(Routes.ONBOARDING) {
                         popUpTo(Routes.MAIN) { inclusive = true }
                     }
-                }
+                },
+                callViewModel = callViewModel
             )
         }
 
@@ -187,7 +196,8 @@ fun SocialAppNavGraph() {
                 calleeName = decode(backStack.arguments?.getString("calleeName")),
                 calleeAvatar = decode(backStack.arguments?.getString("calleeAvatar")),
                 isCallee = backStack.arguments?.getBoolean("isCallee") ?: false,
-                onCallEnded = { navController.popBackStack() }
+                onCallEnded = { navController.popBackStack() },
+                viewModel = callViewModel
             )
         }
 
@@ -208,7 +218,8 @@ fun SocialAppNavGraph() {
                 calleeName = decode(backStack.arguments?.getString("calleeName")),
                 calleeAvatar = decode(backStack.arguments?.getString("calleeAvatar")),
                 isCallee = backStack.arguments?.getBoolean("isCallee") ?: false,
-                onCallEnded = { navController.popBackStack() }
+                onCallEnded = { navController.popBackStack() },
+                viewModel = callViewModel
             )
         }
     }

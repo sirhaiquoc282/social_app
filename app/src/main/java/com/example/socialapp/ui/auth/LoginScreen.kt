@@ -75,35 +75,12 @@ fun LoginScreen(
             Spacer(Modifier.height(8.dp))
 
             Text(
-                "Welcome back! Sign in using your social\naccount or email to continue us",
+                "Welcome back! Sign in using your\nemail to continue",
                 style = MaterialTheme.typography.bodyMedium,
                 color = TextSecondary,
                 textAlign = TextAlign.Start,
                 lineHeight = 20.sp
             )
-
-            Spacer(Modifier.height(32.dp))
-
-            // Social buttons row (UI only)
-            Row(
-                horizontalArrangement = Arrangement.Center,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                SocialCircle("f", Color(0xFF1877F2))
-                Spacer(Modifier.width(20.dp))
-                SocialCircle("G", White, Color(0xFF444444))
-                Spacer(Modifier.width(20.dp))
-                SocialCircle("", Color(0xFF111111))
-            }
-
-            Spacer(Modifier.height(28.dp))
-
-            // OR divider
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                HorizontalDivider(modifier = Modifier.weight(1f), color = DarkDivider)
-                Text("  OR  ", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
-                HorizontalDivider(modifier = Modifier.weight(1f), color = DarkDivider)
-            }
 
             Spacer(Modifier.height(28.dp))
 
@@ -220,16 +197,4 @@ internal fun AuthTextField(
     )
 }
 
-@Composable
-private fun SocialCircle(label: String, bg: Color, textColor: Color = White) {
-    Box(
-        modifier = Modifier
-            .size(52.dp)
-            .clip(CircleShape)
-            .border(1.dp, DarkDivider, CircleShape)
-            .background(bg),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(label, color = textColor, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-    }
-}
+

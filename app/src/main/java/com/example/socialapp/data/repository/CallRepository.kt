@@ -70,7 +70,8 @@ class CallRepository @Inject constructor(
 
     /** Kết thúc cuộc gọi — cả 2 bên đều có thể gọi */
     suspend fun endCall(callId: String) {
-        agoraManager.leaveChannel()
+        // CHÚ Ý: Không gọi agoraManager.leaveChannel() ở đây nữa.
+        // ViewModel đã chịu trách nhiệm rời channel TRƯỚC khi gọi hàm này.
         try {
             firestore.collection("calls").document(callId).update(
                 mapOf(
@@ -133,16 +134,43 @@ class CallRepository @Inject constructor(
      * Dùng khi app foreground — FCM xử lý khi background.
      */
     fun observeIncomingCall(): Flow<CallSignal?> = callbackFlow {
+        val currentUid = uid
+        android.util.Log.d(TAG, "observeIncomingCall() started for uid=$currentUid")
+
+        if (currentUid.isEmpty()) {
+            android.util.Log.e(TAG, "observeIncomingCall() - UID is EMPTY! User chưa đăng nhập.")
+            trySend(null)
+            awaitClose { }
+            return@callbackFlow
+        }
+
         val listener = firestore.collection("calls")
-            .whereEqualTo("calleeId", uid)
+            .whereEqualTo("calleeId", currentUid)
             .whereEqualTo("status", "ringing")
-            .addSnapshotListener { snapshot, _ ->
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    android.util.Log.e(TAG, "observeIncomingCall() Firestore ERROR: ${error.message}", error)
+                    // Có thể do thiếu composite index → check Firebase Console
+                    return@addSnapshotListener
+                }
+
+                val docCount = snapshot?.documents?.size ?: 0
+                android.util.Log.d(TAG, "observeIncomingCall() received $docCount documents")
+
                 val signal = snapshot?.documents?.firstOrNull()?.let { doc ->
+                    android.util.Log.d(TAG, "observeIncomingCall() found call: ${doc.id}, data=${doc.data}")
                     doc.toObject(CallSignal::class.java)?.copy(id = doc.id)
                 }
                 trySend(signal)
             }
-        awaitClose { listener.remove() }
+        awaitClose {
+            android.util.Log.d(TAG, "observeIncomingCall() listener removed")
+            listener.remove()
+        }
+    }
+
+    companion object {
+        private const val TAG = "CallRepository"
     }
 }
 

@@ -40,59 +40,8 @@ fun HomeScreen(
     val conversations by viewModel.conversations.collectAsState()
     val allUsers by viewModel.allUsers.collectAsState()
     val currentUser by viewModel.currentUser.collectAsState()
-    val incomingCall by callViewModel.currentCallSignal.collectAsState()
-    val callState by callViewModel.callState.collectAsState()
     val incomingNotification by viewModel.incomingNotification.collectAsState()
     val currentUid = viewModel.getCurrentUid()
-    var showIncomingCallDialog by remember { mutableStateOf(false) }
-
-    LaunchedEffect(incomingCall) {
-        if (incomingCall?.status == "ringing") showIncomingCallDialog = true
-        // Caller đã hủy cuộc gọi → signal bị null hoặc status khác "ringing"
-        if (incomingCall == null || incomingCall?.status != "ringing") {
-            showIncomingCallDialog = false
-        }
-    }
-
-    // Tự động đóng dialog khi callState thay đổi (caller cancel, ended, etc.)
-    LaunchedEffect(callState) {
-        when (callState) {
-            is com.example.socialapp.ui.call.CallState.Ended,
-            is com.example.socialapp.ui.call.CallState.Declined,
-            is com.example.socialapp.ui.call.CallState.Idle -> {
-                showIncomingCallDialog = false
-            }
-            else -> {}
-        }
-    }
-
-    if (showIncomingCallDialog && incomingCall != null) {
-        val signal = incomingCall!!
-        val context = androidx.compose.ui.platform.LocalContext.current
-        androidx.compose.ui.window.Dialog(
-            onDismissRequest = {}
-        ) {
-            com.example.socialapp.ui.call.IncomingCallScreen(
-                callerName = signal.callerName,
-                callerAvatar = signal.callerAvatar,
-                callType = signal.type,
-                onAccept = {
-                    showIncomingCallDialog = false
-                    callViewModel.onIncomingCall(signal)
-                    callViewModel.acceptCall(context)
-                    if (signal.type == "video")
-                        onNavigateToVideoCall(signal.id, signal.callerId, signal.callerName, signal.callerAvatar, true)
-                    else
-                        onNavigateToVoiceCall(signal.id, signal.callerId, signal.callerName, signal.callerAvatar, true)
-                },
-                onDecline = {
-                    showIncomingCallDialog = false
-                    callViewModel.declineCall()
-                }
-            )
-        }
-
-    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(

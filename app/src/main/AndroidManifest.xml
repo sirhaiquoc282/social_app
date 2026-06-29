@@ -23,6 +23,15 @@
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
 
+    <queries>
+        <package android:name="com.google.android.gms" />
+        <package android:name="com.google.android.gsf" />
+        <package android:name="com.android.vending" />
+        <intent>
+            <action android:name="com.google.android.gms.auth.service.START" />
+        </intent>
+    </queries>
+
     <application
         android:name=".SocialApp"
         android:allowBackup="true"
@@ -66,7 +75,7 @@
         <!-- Notification channels meta-data -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="default_channel" />
+            android:value="channel_message" />
 
     </application>
 

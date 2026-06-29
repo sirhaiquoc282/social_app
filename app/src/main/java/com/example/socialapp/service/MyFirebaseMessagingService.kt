@@ -26,6 +26,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         val data = message.data
         when (data["type"]) {
             "incoming_call" -> showIncomingCallNotification(data)
+            "cancel_call"   -> cancelCallNotification(this)
             "new_message"   -> showMessageNotification(data)
         }
     }
@@ -86,6 +87,45 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
     companion object {
         const val CALL_NOTIFICATION_ID = 1001
         const val MESSAGE_NOTIFICATION_ID = 1002
+
+        fun cancelCallNotification(context: android.content.Context) {
+            val nm = context.getSystemService(NotificationManager::class.java)
+            nm.cancel(CALL_NOTIFICATION_ID)
+        }
+
+        fun showIncomingCallNotificationLocal(context: android.content.Context, signal: com.example.socialapp.data.model.CallSignal) {
+            val intent = Intent(context, IncomingCallActivity::class.java).apply {
+                putExtra("callId", signal.id)
+                putExtra("callerName", signal.callerName)
+                putExtra("callerAvatar", signal.callerAvatar)
+                putExtra("callerId", signal.callerId)
+                putExtra("callType", signal.type)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
+
+            val pendingIntent = PendingIntent.getActivity(
+                context, 0, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            // QUAN TRỌNG: KHÔNG dùng setFullScreenIntent ở đây!
+            // Vì MainScreen Dialog đã hiển thị popup cuộc gọi khi app foreground.
+            // Nếu dùng fullScreenIntent, IncomingCallActivity sẽ tự mở ra
+            // → IncomingCallActivity hiện VideoCallScreen → khởi động Camera
+            // → Xung đột với Dialog đang hiển thị → Lỗi EGLImage liên tục!
+            val notification = NotificationCompat.Builder(context, SocialApp.CHANNEL_CALL)
+                .setContentTitle("Cuộc gọi đến từ ${signal.callerName}")
+                .setContentText(if (signal.type == "video") "\uD83D\uDCF9 Gọi video" else "\uD83D\uDCDE Gọi thoại")
+                .setSmallIcon(android.R.drawable.ic_menu_call)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setCategory(NotificationCompat.CATEGORY_CALL)
+                .setContentIntent(pendingIntent)
+                .setAutoCancel(true)
+                .build()
+
+            val nm = context.getSystemService(NotificationManager::class.java)
+            nm.notify(CALL_NOTIFICATION_ID, notification)
+        }
     }
 }
 

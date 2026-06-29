@@ -8,6 +8,7 @@ import com.example.socialapp.data.model.CallSignal
 import com.example.socialapp.data.remote.AgoraManager
 import com.example.socialapp.data.repository.CallRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import io.agora.rtc2.IRtcEngineEventHandler
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,6 +29,7 @@ sealed class CallState {
 
 @HiltViewModel
 class CallViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val callRepository: CallRepository,
     private val agoraManager: AgoraManager
 ) : ViewModel() {
@@ -59,6 +61,10 @@ class CallViewModel @Inject constructor(
     private var currentCallId: String = ""
     private var isCallee = false
 
+    // ═══ CỜ BẢO VỆ: Ngăn resetAfterCall() bị gọi nhiều lần cùng lúc ═══
+    @Volatile
+    private var isResetting = false
+
     init {
         // Tự động lắng nghe cuộc gọi đến khi app foreground
         startObservingIncomingCalls()
@@ -69,20 +75,28 @@ class CallViewModel @Inject constructor(
         incomingCallJob?.cancel()
         incomingCallJob = viewModelScope.launch {
             callRepository.observeIncomingCall().collect { signal ->
+                android.util.Log.d(TAG, "observeIncomingCall → signal=${signal?.id}, state=${_callState.value}, isResetting=$isResetting")
+
+                // Nếu đang trong quá trình reset, bỏ qua mọi event
+                if (isResetting) return@collect
+
                 if (signal != null && _callState.value == CallState.Idle) {
                     _currentCallSignal.value = signal
                     currentCallId = signal.id
                     isCallee = true
                     _callState.value = CallState.Ringing
+
+                    // SHOW NOTIFICATION BẰNG TAY Ở ĐÂY (thay vì phụ thuộc Cloud Function)
+                    com.example.socialapp.service.MyFirebaseMessagingService.showIncomingCallNotificationLocal(context, signal)
+
                     // Bắt đầu observe trạng thái cuộc gọi này
                     // để phát hiện khi caller hủy cuộc gọi
                     observeCallStatus(signal.id)
+
                 } else if (signal == null && _callState.value == CallState.Ringing && isCallee) {
                     // Caller đã hủy cuộc gọi (status không còn "ringing")
-                    // → reset trạng thái về Idle
-                    android.util.Log.d(TAG, "Incoming call cancelled by caller")
-                    _callState.value = CallState.Ended
-                    resetAfterCall()
+                    android.util.Log.d(TAG, "Incoming call cancelled by caller (detected via observeIncomingCall)")
+                    cleanupCall()
                 }
             }
         }
@@ -160,11 +174,11 @@ class CallViewModel @Inject constructor(
     fun acceptCall(context: Context) {
         val signal = _currentCallSignal.value ?: return
         android.util.Log.d(TAG, "acceptCall() channelName=${signal.channelName}, type=${signal.type}")
-        
+
         // Cập nhật state ngay lập tức để khi update Firestore ("accepted"),
         // observeIncomingCall nhận signal = null sẽ không bị nhầm là caller cancel (do state không còn là Ringing).
         _callState.value = CallState.Connected
-        
+
         viewModelScope.launch {
             try {
                 callRepository.acceptCall(currentCallId)
@@ -186,34 +200,75 @@ class CallViewModel @Inject constructor(
     fun declineCall() {
         viewModelScope.launch {
             try { callRepository.declineCall(currentCallId) } catch (_: Exception) {}
-            _callState.value = CallState.Ended
-            resetAfterCall()
+            cleanupCall()
         }
     }
 
     // ─── Kết thúc cuộc gọi (cả 2 bên) ───────────────────────────────────────
     fun endCall() {
         viewModelScope.launch {
+            android.util.Log.d(TAG, "endCall() called, currentCallId=$currentCallId")
+
+            // 1. Dừng lắng nghe Firestore NGAY LẬP TỨC
             observeJob?.cancel()
+            observeJob = null
+
+            // 2. Rời khỏi Agora channel TRƯỚC (dừng âm thanh ngay lập tức)
+            agoraManager.leaveChannel()
+
+            // 3. Cập nhật trạng thái Firestore
             try { callRepository.endCall(currentCallId) } catch (_: Exception) {}
-            _callState.value = CallState.Ended
-            resetAfterCall()
+
+            // 4. Dọn dẹp toàn bộ
+            cleanupCall()
         }
     }
 
-    private fun resetAfterCall() {
+    /**
+     * ═══ HÀM DỌN DẸP TRUNG TÂM ═══
+     * Đây là hàm DUY NHẤT chịu trách nhiệm dọn dẹp sau mỗi cuộc gọi.
+     * Có cờ bảo vệ [isResetting] để CHẮC CHẮN chỉ chạy 1 lần duy nhất.
+     */
+    private fun cleanupCall() {
+        // ═══ GUARD: Nếu đang dọn dẹp rồi thì dừng ngay, không làm gì thêm ═══
+        if (isResetting) {
+            android.util.Log.d(TAG, "cleanupCall() SKIPPED - already resetting")
+            return
+        }
+        isResetting = true
+        android.util.Log.d(TAG, "cleanupCall() STARTED for callId=$currentCallId")
+
+        // 1. Dừng TẤT CẢ listeners ngay lập tức
         observeJob?.cancel()
+        observeJob = null
         incomingCallJob?.cancel()
+        incomingCallJob = null
+
+        // 2. Rời channel Agora (an toàn nếu gọi nhiều lần)
+        agoraManager.leaveChannel()
+
+        // 3. Xoá thông báo cuộc gọi trong System Tray NGAY LẬP TỨC
+        com.example.socialapp.service.MyFirebaseMessagingService.cancelCallNotification(context)
+
+        // 4. Cập nhật UI state → Dialog sẽ bị ẩn ngay trong Compose
+        _callState.value = CallState.Ended
+        _currentCallSignal.value = null
+
+        // 5. Reset toàn bộ internal state
         currentCallId = ""
         isCallee = false
-        _currentCallSignal.value = null
         _isMicMuted.value = false
         _isCamMuted.value = false
         _remoteUid.value = null
         _readyToJoinVideo.value = null
+        _isSpeakerOn.value = true
+
+        // 6. Sau 1 giây, chuyển về Idle và bắt đầu lắng nghe cuộc gọi mới
         viewModelScope.launch {
-            kotlinx.coroutines.delay(500)
+            kotlinx.coroutines.delay(1000)
             _callState.value = CallState.Idle
+            isResetting = false  // ═══ MỞ KHOÁ cho cuộc gọi kế tiếp ═══
+            android.util.Log.d(TAG, "cleanupCall() COMPLETED - ready for next call")
             startObservingIncomingCalls()
         }
     }
@@ -256,10 +311,9 @@ class CallViewModel @Inject constructor(
     ): Boolean {
         android.util.Log.d(TAG, "initAgoraEngine() channelName=$channelName, type=$type, isCallee=$isCallee")
         val handler = object : IRtcEngineEventHandler() {
-            // ... (giữ nguyên handler)
             override fun onJoinChannelSuccess(channel: String, uid: Int, elapsed: Int) {
                 android.util.Log.d(TAG, "onJoinChannelSuccess channel=$channel, uid=$uid")
-                if (!isCallee) _callState.value = CallState.Calling 
+                if (!isCallee) _callState.value = CallState.Calling
             }
             override fun onUserJoined(uid: Int, elapsed: Int) {
                 android.util.Log.d(TAG, "onUserJoined uid=$uid")
@@ -270,7 +324,8 @@ class CallViewModel @Inject constructor(
             override fun onUserOffline(uid: Int, reason: Int) {
                 android.util.Log.d(TAG, "onUserOffline uid=$uid, reason=$reason")
                 _remoteUid.value = null
-                _callState.value = CallState.Ended
+                // Khi đối phương thoát khỏi channel → kết thúc cuộc gọi
+                cleanupCall()
             }
             override fun onError(err: Int) {
                 android.util.Log.e(TAG, "Agora onError: $err")
@@ -280,7 +335,7 @@ class CallViewModel @Inject constructor(
 
         val success = agoraManager.initEngine(handler)
         android.util.Log.d(TAG, "initEngine result=$success")
-        
+
         if (!success) {
             _callState.value = CallState.Error("Lỗi khởi tạo Agora. Kiểm tra App ID!")
             return false
@@ -305,18 +360,30 @@ class CallViewModel @Inject constructor(
         observeJob = viewModelScope.launch {
             callRepository.observeCall(callId).collect { signal ->
                 signal ?: return@collect
+
+                // Bỏ qua nếu đang dọn dẹp
+                if (isResetting) return@collect
+
+                // CHỈ xử lý nếu callId khớp với cuộc gọi hiện tại
+                if (signal.id != currentCallId && currentCallId.isNotEmpty()) {
+                    android.util.Log.d(TAG, "Ignoring stale event for callId=${signal.id}, currentCallId=$currentCallId")
+                    return@collect
+                }
+
+                android.util.Log.d(TAG, "observeCallStatus → callId=${signal.id}, status=${signal.status}")
                 _currentCallSignal.value = signal
+
                 when (signal.status) {
                     "accepted" -> {
                         if (!isCallee) _callState.value = CallState.Connected
                     }
                     "declined" -> {
-                        agoraManager.leaveChannel()
-                        _callState.value = CallState.Declined
+                        android.util.Log.d(TAG, "Call declined by callee")
+                        cleanupCall()
                     }
                     "ended" -> {
-                        agoraManager.leaveChannel()
-                        _callState.value = CallState.Ended
+                        android.util.Log.d(TAG, "Call ended (detected via observeCallStatus)")
+                        cleanupCall()
                     }
                 }
             }
@@ -334,4 +401,3 @@ class CallViewModel @Inject constructor(
         private const val TAG = "CallViewModel"
     }
 }
-

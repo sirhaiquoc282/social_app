@@ -106,8 +106,8 @@ fun SettingsScreen(
                             style = MaterialTheme.typography.bodySmall
                         )
                     }
-                    Icon(Icons.Default.QrCode, null, tint = ChatboxTealAccent,
-                        modifier = Modifier.size(28.dp))
+                    Icon(Icons.Default.Edit, null, tint = ChatboxTealAccent,
+                        modifier = Modifier.size(24.dp).clickable { /* TODO: Edit Profile */ })
                 }
                 HorizontalDivider(color = DarkDivider)
             }
@@ -115,39 +115,27 @@ fun SettingsScreen(
             item {
                 Spacer(Modifier.height(8.dp))
                 SettingsItem(
-                    icon = Icons.Default.Lock,
-                    title = "Account",
-                    subtitle = "Privacy, security, change number",
+                    icon = Icons.Default.Person,
+                    title = "Account Details",
+                    subtitle = "Update email, change password",
                     onClick = {}
                 )
                 SettingsItem(
-                    icon = Icons.Default.ChatBubbleOutline,
-                    title = "Chat",
-                    subtitle = "Chat history, theme, wallpapers",
+                    icon = Icons.Default.RemoveRedEye,
+                    title = "Active Status",
+                    subtitle = "Show when you're active",
                     onClick = {}
                 )
                 SettingsItem(
                     icon = Icons.Default.Notifications,
                     title = "Notifications",
-                    subtitle = "Messages, group and others",
+                    subtitle = "Sound, vibrate, push notifications",
                     onClick = {}
                 )
                 SettingsItem(
                     icon = Icons.Default.Help,
-                    title = "Help",
-                    subtitle = "Help center, contact us, privacy policy",
-                    onClick = {}
-                )
-                SettingsItem(
-                    icon = Icons.Default.Storage,
-                    title = "Storage and data",
-                    subtitle = "Network usage, storage usage",
-                    onClick = {}
-                )
-                SettingsItem(
-                    icon = Icons.Default.PersonAdd,
-                    title = "Invite a friend",
-                    subtitle = "",
+                    title = "Help & Support",
+                    subtitle = "FAQ, contact us, privacy policy",
                     onClick = {}
                 )
 

@@ -80,35 +80,7 @@ fun OnboardingScreen(
 
             Spacer(Modifier.weight(1f))
 
-            // Social login row (UI only)
-            Row(
-                horizontalArrangement = Arrangement.Center,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                SocialButton(label = "f", bgColor = Color(0xFF1877F2))
-                Spacer(Modifier.width(20.dp))
-                SocialButton(label = "G", bgColor = Color(0xFFFFFFFF), textColor = Color(0xFF444444))
-                Spacer(Modifier.width(20.dp))
-                SocialButton(label = "", bgColor = Color(0xFF000000), isApple = true)
-            }
 
-            Spacer(Modifier.height(24.dp))
-
-            // OR divider
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                HorizontalDivider(modifier = Modifier.weight(1f), color = DarkDivider)
-                Text(
-                    "  OR  ",
-                    color = TextSecondary,
-                    style = MaterialTheme.typography.bodySmall
-                )
-                HorizontalDivider(modifier = Modifier.weight(1f), color = DarkDivider)
-            }
-
-            Spacer(Modifier.height(20.dp))
 
             // Sign up button
             Button(
@@ -132,9 +104,9 @@ fun OnboardingScreen(
             Spacer(Modifier.height(20.dp))
 
             // Login link
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center
+            TextButton(
+                onClick = onLogin,
+                modifier = Modifier.align(Alignment.CenterHorizontally)
             ) {
                 Text(
                     buildAnnotatedString {
@@ -144,49 +116,10 @@ fun OnboardingScreen(
                     style = MaterialTheme.typography.bodyMedium
                 )
             }
-            // Wrap in clickable
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(4.dp))
-                    .then(
-                        Modifier.padding(bottom = 4.dp)
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                TextButton(onClick = onLogin) {
-                    Text(
-                        "Already have an account? Log in",
-                        color = TextSecondary,
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-            }
 
             Spacer(Modifier.height(16.dp))
         }
     }
 }
 
-@Composable
-private fun SocialButton(
-    label: String,
-    bgColor: Color,
-    textColor: Color = White,
-    isApple: Boolean = false
-) {
-    Box(
-        modifier = Modifier
-            .size(56.dp)
-            .clip(CircleShape)
-            .border(1.dp, DarkDivider, CircleShape)
-            .background(bgColor),
-        contentAlignment = Alignment.Center
-    ) {
-        if (isApple) {
-            Text("", color = textColor, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-        } else {
-            Text(label, color = textColor, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-        }
-    }
-}
+
