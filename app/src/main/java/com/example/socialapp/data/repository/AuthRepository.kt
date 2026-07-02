@@ -142,5 +142,29 @@ class AuthRepository @Inject constructor(
                 .update("status", status).await()
         } catch (_: Exception) {}
     }
+
+    suspend fun updateDisplayName(newName: String): Result<Unit> {
+        return try {
+            val user = auth.currentUser ?: throw Exception("User not logged in")
+            val profileUpdates = com.google.firebase.auth.UserProfileChangeRequest.Builder()
+                .setDisplayName(newName)
+                .build()
+            user.updateProfile(profileUpdates).await()
+            firestore.collection("users").document(user.uid)
+                .update("displayName", newName).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun sendPasswordResetEmail(email: String): Result<Unit> {
+        return try {
+            auth.sendPasswordResetEmail(email).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 }
 

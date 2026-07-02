@@ -9,6 +9,9 @@ object Routes {
     const val LOGIN         = "login"
     const val REGISTER      = "register"
     const val MAIN          = "main"   // bottom-nav host
+    const val ACCOUNT_DETAILS = "account_details"
+    const val NOTIFICATIONS   = "notifications"
+    const val HELP_SUPPORT    = "help_support"
 
     const val CHAT          = "chat/{otherUid}/{otherName}/{otherAvatar}"
     const val USER_PROFILE  = "user_profile/{uid}/{name}/{avatar}"

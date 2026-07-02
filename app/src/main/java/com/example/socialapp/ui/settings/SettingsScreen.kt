@@ -27,6 +27,9 @@ import com.example.socialapp.ui.theme.*
 
 @Composable
 fun SettingsScreen(
+    onNavigateToAccountDetails: () -> Unit,
+    onNavigateToNotifications: () -> Unit,
+    onNavigateToHelpSupport: () -> Unit,
     onLogout: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
@@ -71,6 +74,7 @@ fun SettingsScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .clickable(onClick = onNavigateToAccountDetails)
                         .padding(horizontal = 16.dp, vertical = 20.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -107,7 +111,7 @@ fun SettingsScreen(
                         )
                     }
                     Icon(Icons.Default.Edit, null, tint = ChatboxTealAccent,
-                        modifier = Modifier.size(24.dp).clickable { /* TODO: Edit Profile */ })
+                        modifier = Modifier.size(24.dp))
                 }
                 HorizontalDivider(color = DarkDivider)
             }
@@ -118,25 +122,19 @@ fun SettingsScreen(
                     icon = Icons.Default.Person,
                     title = "Account Details",
                     subtitle = "Update email, change password",
-                    onClick = {}
-                )
-                SettingsItem(
-                    icon = Icons.Default.RemoveRedEye,
-                    title = "Active Status",
-                    subtitle = "Show when you're active",
-                    onClick = {}
+                    onClick = onNavigateToAccountDetails
                 )
                 SettingsItem(
                     icon = Icons.Default.Notifications,
                     title = "Notifications",
                     subtitle = "Sound, vibrate, push notifications",
-                    onClick = {}
+                    onClick = onNavigateToNotifications
                 )
                 SettingsItem(
                     icon = Icons.Default.Help,
                     title = "Help & Support",
                     subtitle = "FAQ, contact us, privacy policy",
-                    onClick = {}
+                    onClick = onNavigateToHelpSupport
                 )
 
                 Spacer(Modifier.height(16.dp))

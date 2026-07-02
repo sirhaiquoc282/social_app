@@ -61,6 +61,9 @@ class CallViewModel @Inject constructor(
     private var currentCallId: String = ""
     private var isCallee = false
 
+    // Lưu các callId đã bị dismiss/cleanup để không hiện lại khi listener restart
+    private val dismissedCallIds = mutableSetOf<String>()
+
     // ═══ CỜ BẢO VỆ: Ngăn resetAfterCall() bị gọi nhiều lần cùng lúc ═══
     @Volatile
     private var isResetting = false
@@ -81,6 +84,21 @@ class CallViewModel @Inject constructor(
                 if (isResetting) return@collect
 
                 if (signal != null && _callState.value == CallState.Idle) {
+                    // Bỏ qua cuộc gọi đã bị dismiss trước đó
+                    if (signal.id in dismissedCallIds) {
+                        android.util.Log.d(TAG, "Skipping dismissed call ${signal.id}")
+                        return@collect
+                    }
+
+                    // ═══ XÁC MINH KÉP: Đọc lại trạng thái THỰC TẾ TỪ SERVER ═══
+                    // Firestore listener có thể trễ, gửi event "ringing" khi cuộc gọi đã kết thúc.
+                    val actualStatus = callRepository.verifyCallStatus(signal.id)
+                    if (actualStatus != "ringing") {
+                        android.util.Log.d(TAG, "Incoming call ${signal.id} is no longer ringing (actual=$actualStatus), ignoring")
+                        dismissedCallIds.add(signal.id)
+                        return@collect
+                    }
+
                     _currentCallSignal.value = signal
                     currentCallId = signal.id
                     isCallee = true
@@ -108,13 +126,17 @@ class CallViewModel @Inject constructor(
         calleeId: String,
         callerName: String,
         callerAvatar: String,
+        calleeName: String,
+        calleeAvatar: String,
         type: String   // "voice" | "video"
     ) {
         viewModelScope.launch {
             _callState.value = CallState.Calling
             try {
                 android.util.Log.d(TAG, "startCall() type=$type, calleeId=$calleeId")
-                val (callId, channelName) = callRepository.startCall(calleeId, callerName, callerAvatar, type)
+                val (callId, channelName) = callRepository.startCall(
+                    calleeId, callerName, callerAvatar, calleeName, calleeAvatar, type
+                )
                 android.util.Log.d(TAG, "startCall() got callId=$callId, channelName=$channelName")
                 currentCallId = callId
                 isCallee = false
@@ -167,6 +189,11 @@ class CallViewModel @Inject constructor(
                 status = "ringing"
             )
             _callState.value = CallState.Ringing
+
+            // ═══ QUAN TRỌNG: Bắt đầu observe trạng thái cuộc gọi NGAY LẬP TỨC ═══
+            // Nếu cuộc gọi đã kết thúc (ended/declined) trước khi Activity mở,
+            // observer sẽ phát hiện và gọi cleanupCall() → Activity tự đóng.
+            observeCallStatus(callId)
         }
     }
 
@@ -227,16 +254,24 @@ class CallViewModel @Inject constructor(
     /**
      * ═══ HÀM DỌN DẸP TRUNG TÂM ═══
      * Đây là hàm DUY NHẤT chịu trách nhiệm dọn dẹp sau mỗi cuộc gọi.
-     * Có cờ bảo vệ [isResetting] để CHẮC CHẮN chỉ chạy 1 lần duy nhất.
+     * Bước 1 (UI cleanup) LUÔN CHẠY bất kể isResetting.
+     * Bước 2+ (internal cleanup) chỉ chạy 1 lần nhờ cờ [isResetting].
      */
     private fun cleanupCall() {
-        // ═══ GUARD: Nếu đang dọn dẹp rồi thì dừng ngay, không làm gì thêm ═══
+        android.util.Log.d(TAG, "cleanupCall() called for callId=$currentCallId, isResetting=$isResetting")
+
+        // ═══ LUÔN CHẠY: Hủy notification + ẩn dialog NGAY LẬP TỨC ═══
+        // Dù isResetting = true hay false, UI phải được dọn dẹp.
+        com.example.socialapp.service.MyFirebaseMessagingService.cancelCallNotification(context)
+        _callState.value = CallState.Ended
+        _currentCallSignal.value = null
+
+        // ═══ GUARD: Chỉ chạy phần internal cleanup 1 lần duy nhất ═══
         if (isResetting) {
-            android.util.Log.d(TAG, "cleanupCall() SKIPPED - already resetting")
+            android.util.Log.d(TAG, "cleanupCall() UI cleaned, skipping internal cleanup (already resetting)")
             return
         }
         isResetting = true
-        android.util.Log.d(TAG, "cleanupCall() STARTED for callId=$currentCallId")
 
         // 1. Dừng TẤT CẢ listeners ngay lập tức
         observeJob?.cancel()
@@ -247,14 +282,10 @@ class CallViewModel @Inject constructor(
         // 2. Rời channel Agora (an toàn nếu gọi nhiều lần)
         agoraManager.leaveChannel()
 
-        // 3. Xoá thông báo cuộc gọi trong System Tray NGAY LẬP TỨC
-        com.example.socialapp.service.MyFirebaseMessagingService.cancelCallNotification(context)
-
-        // 4. Cập nhật UI state → Dialog sẽ bị ẩn ngay trong Compose
-        _callState.value = CallState.Ended
-        _currentCallSignal.value = null
-
-        // 5. Reset toàn bộ internal state
+        // 3. Reset toàn bộ internal state
+        if (currentCallId.isNotEmpty()) {
+            dismissedCallIds.add(currentCallId)
+        }
         currentCallId = ""
         isCallee = false
         _isMicMuted.value = false
@@ -263,7 +294,7 @@ class CallViewModel @Inject constructor(
         _readyToJoinVideo.value = null
         _isSpeakerOn.value = true
 
-        // 6. Sau 1 giây, chuyển về Idle và bắt đầu lắng nghe cuộc gọi mới
+        // 4. Sau 1 giây, chuyển về Idle và bắt đầu lắng nghe cuộc gọi mới
         viewModelScope.launch {
             kotlinx.coroutines.delay(1000)
             _callState.value = CallState.Idle
@@ -294,12 +325,16 @@ class CallViewModel @Inject constructor(
         agoraManager.setSpeaker(on)
     }
 
-    fun setupRemoteVideo(remoteView: SurfaceView, uid: Int) {
+    fun setupRemoteVideo(remoteView: android.view.View, uid: Int) {
         agoraManager.setupRemoteVideo(remoteView, uid)
     }
 
-    fun setupLocalVideo(localView: SurfaceView) {
+    fun setupLocalVideo(localView: android.view.View) {
         agoraManager.setupLocalVideo(localView)
+    }
+
+    fun createRendererView(ctx: Context): android.view.TextureView {
+        return agoraManager.createRendererView(ctx)
     }
 
     // ─── Internal ─────────────────────────────────────────────────────────────
@@ -350,7 +385,7 @@ class CallViewModel @Inject constructor(
         return true
     }
 
-    fun joinVideoWithView(localView: SurfaceView, channelName: String) {
+    fun joinVideoWithView(localView: android.view.View, channelName: String) {
         android.util.Log.d(TAG, "joinVideoWithView() channelName=$channelName, engineInit=${agoraManager.isInitialized()}")
         agoraManager.joinVideoChannel(channelName, localView)
     }
@@ -381,8 +416,8 @@ class CallViewModel @Inject constructor(
                         android.util.Log.d(TAG, "Call declined by callee")
                         cleanupCall()
                     }
-                    "ended" -> {
-                        android.util.Log.d(TAG, "Call ended (detected via observeCallStatus)")
+                    "ended", "missed" -> {
+                        android.util.Log.d(TAG, "Call ended/missed (detected via observeCallStatus)")
                         cleanupCall()
                     }
                 }

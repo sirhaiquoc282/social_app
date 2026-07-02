@@ -5,6 +5,7 @@ import com.example.socialapp.data.remote.AgoraManager
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Source
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -32,6 +33,8 @@ class CallRepository @Inject constructor(
         calleeId: String,
         callerName: String,
         callerAvatar: String,
+        calleeName: String,
+        calleeAvatar: String,
         type: String   // "voice" | "video"
     ): Pair<String, String> {
         val callId = UUID.randomUUID().toString()
@@ -43,6 +46,8 @@ class CallRepository @Inject constructor(
                 "calleeId" to calleeId,
                 "callerName" to callerName,
                 "callerAvatar" to callerAvatar,
+                "calleeName" to calleeName,
+                "calleeAvatar" to calleeAvatar,
                 "channelName" to channelName,
                 "type" to type,
                 "status" to "ringing",
@@ -88,6 +93,16 @@ class CallRepository @Inject constructor(
             firestore.collection("calls").document(callId)
                 .update("status", "missed").await()
         } catch (_: Exception) {}
+    }
+
+    /** Kiểm tra trạng thái THỰC TẾ của cuộc gọi trên Firestore (đọc trực tiếp TỪ SERVER, bỏ qua cache) */
+    suspend fun verifyCallStatus(callId: String): String? {
+        return try {
+            val doc = firestore.collection("calls").document(callId).get(Source.SERVER).await()
+            doc.getString("status")
+        } catch (_: Exception) {
+            null
+        }
     }
 
     /** Lắng nghe trạng thái 1 cuộc gọi cụ thể */

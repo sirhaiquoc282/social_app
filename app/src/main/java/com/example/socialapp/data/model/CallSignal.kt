@@ -8,6 +8,8 @@ data class CallSignal(
     val calleeId: String = "",
     val callerName: String = "",
     val callerAvatar: String = "",
+    val calleeName: String = "",
+    val calleeAvatar: String = "",
     val channelName: String = "",
     val type: String = "voice",     // "voice" | "video"
     val status: String = "ringing", // "ringing" | "accepted" | "declined" | "ended" | "missed"

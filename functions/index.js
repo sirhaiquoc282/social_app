@@ -107,8 +107,10 @@ exports.onCallUpdated = onDocumentUpdated("calls/{callId}", async (event) => {
   const after = event.data.after.data();
   const callId = event.params.callId;
 
-  // Nếu chuyển từ "ringing" sang "ended" (caller huỷ) hoặc "declined" (bị từ chối)
-  if (before.status === "ringing" && (after.status === "ended" || after.status === "declined")) {
+  // Nếu chuyển từ "ringing" sang trạng thái khác (ended, declined, accepted, missed)
+  // → gửi yêu cầu huỷ notification trên máy callee
+  const terminalStatuses = ["ended", "declined", "accepted", "missed"];
+  if (before.status === "ringing" && terminalStatuses.includes(after.status)) {
     const calleeId = after.calleeId;
     if (!calleeId) return null;
 

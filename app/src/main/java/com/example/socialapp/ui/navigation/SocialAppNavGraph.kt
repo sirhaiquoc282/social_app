@@ -1,7 +1,10 @@
 package com.example.socialapp.ui.navigation
 
 import androidx.activity.ComponentActivity
-import androidx.compose.runtime.Composable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavType
@@ -12,6 +15,7 @@ import androidx.navigation.navArgument
 import com.example.socialapp.ui.auth.AuthViewModel
 import com.example.socialapp.ui.auth.LoginScreen
 import com.example.socialapp.ui.auth.RegisterScreen
+import com.example.socialapp.ui.call.CallState
 import com.example.socialapp.ui.call.CallViewModel
 import com.example.socialapp.ui.call.video.VideoCallScreen
 import com.example.socialapp.ui.call.voice.VoiceCallScreen
@@ -19,6 +23,9 @@ import com.example.socialapp.ui.chat.ChatScreen
 import com.example.socialapp.ui.main.MainScreen
 import com.example.socialapp.ui.onboarding.OnboardingScreen
 import com.example.socialapp.ui.profile.UserProfileScreen
+import com.example.socialapp.ui.settings.AccountDetailsScreen
+import com.example.socialapp.ui.settings.HelpSupportScreen
+import com.example.socialapp.ui.settings.NotificationsScreen
 import com.example.socialapp.ui.splash.SplashScreen
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
@@ -37,10 +44,29 @@ fun SocialAppNavGraph() {
         URLDecoder.decode(s ?: "none", StandardCharsets.UTF_8.toString())
             .let { if (it == "none") "" else it }
 
-    NavHost(
-        navController = navController,
-        startDestination = Routes.SPLASH
-    ) {
+    // ═══ INCOMING CALL OVERLAY (hiện trên MỌI màn hình) ═══
+    val incomingCall by callViewModel.currentCallSignal.collectAsState()
+    val callState by callViewModel.callState.collectAsState()
+    val context = LocalContext.current
+
+    val shouldShowDialog = incomingCall != null
+            && incomingCall?.status == "ringing"
+            && callState is CallState.Ringing
+
+    LaunchedEffect(callState) {
+        when (callState) {
+            is CallState.Ended, is CallState.Declined, is CallState.Idle -> {
+                com.example.socialapp.service.MyFirebaseMessagingService.cancelCallNotification(context)
+            }
+            else -> {}
+        }
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        NavHost(
+            navController = navController,
+            startDestination = Routes.SPLASH
+        ) {
 
         // ── Splash ────────────────────────────────────────────────────────────
         composable(Routes.SPLASH) {
@@ -108,6 +134,9 @@ fun SocialAppNavGraph() {
                 onNavigateToUserProfile = { uid, name, avatar ->
                     navController.navigate(Routes.userProfileRoute(uid, name, avatar))
                 },
+                onNavigateToAccountDetails = { navController.navigate(Routes.ACCOUNT_DETAILS) },
+                onNavigateToNotifications = { navController.navigate(Routes.NOTIFICATIONS) },
+                onNavigateToHelpSupport = { navController.navigate(Routes.HELP_SUPPORT) },
                 onLogout = {
                     authViewModel.logout()
                     navController.navigate(Routes.ONBOARDING) {
@@ -116,6 +145,17 @@ fun SocialAppNavGraph() {
                 },
                 callViewModel = callViewModel
             )
+        }
+
+        // ── Settings Sub-Screens ──────────────────────────────────────────────
+        composable(Routes.ACCOUNT_DETAILS) {
+            AccountDetailsScreen(onBack = { navController.popBackStack() })
+        }
+        composable(Routes.NOTIFICATIONS) {
+            NotificationsScreen(onBack = { navController.popBackStack() })
+        }
+        composable(Routes.HELP_SUPPORT) {
+            HelpSupportScreen(onBack = { navController.popBackStack() })
         }
 
         // ── User Profile ──────────────────────────────────────────────────────
@@ -222,5 +262,37 @@ fun SocialAppNavGraph() {
                 viewModel = callViewModel
             )
         }
-    }
+        } // end NavHost
+
+        // ═══ INCOMING CALL DIALOG OVERLAY ═══
+        // Hiển thị ĐÈ LÊN trên mọi màn hình (Chat, Profile, Settings, v.v.)
+        if (shouldShowDialog) {
+            val signal = incomingCall!!
+            androidx.compose.ui.window.Dialog(
+                onDismissRequest = {}
+            ) {
+                com.example.socialapp.ui.call.IncomingCallScreen(
+                    callerName = signal.callerName,
+                    callerAvatar = signal.callerAvatar,
+                    callType = signal.type,
+                    onAccept = {
+                        callViewModel.onIncomingCall(signal)
+                        callViewModel.acceptCall(context)
+                        if (signal.type == "video")
+                            navController.navigate(
+                                Routes.videoCallRoute(signal.id, signal.callerId, signal.callerName, signal.callerAvatar, true)
+                            )
+                        else
+                            navController.navigate(
+                                Routes.voiceCallRoute(signal.id, signal.callerId, signal.callerName, signal.callerAvatar, true)
+                            )
+                    },
+                    onDecline = {
+                        callViewModel.declineCall()
+                    }
+                )
+            }
+        }
+    } // end Box
 }
+

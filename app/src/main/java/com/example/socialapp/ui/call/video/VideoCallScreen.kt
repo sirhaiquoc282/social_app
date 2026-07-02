@@ -50,8 +50,8 @@ fun VideoCallScreen(
         mutableStateOf(com.example.socialapp.util.PermissionHelper.hasVideoPermissions(context)) 
     }
 
-    val localSurfaceView = remember { SurfaceView(context).apply { setZOrderMediaOverlay(true) } }
-    val remoteSurfaceView = remember { SurfaceView(context) }
+    val localSurfaceView = remember { viewModel.createRendererView(context) }
+    val remoteSurfaceView = remember { viewModel.createRendererView(context) }
 
     // Xin quyền Camera/Mic
     com.example.socialapp.ui.call.RequestCallPermissions(
@@ -82,6 +82,8 @@ fun VideoCallScreen(
                     .currentUser?.displayName ?: "Unknown",
                 callerAvatar = com.google.firebase.auth.FirebaseAuth.getInstance()
                     .currentUser?.photoUrl?.toString() ?: "",
+                calleeName = calleeName,
+                calleeAvatar = calleeAvatar,
                 type = "video"
             )
         }
@@ -172,10 +174,6 @@ fun VideoCallScreen(
                                 ViewGroup.LayoutParams.MATCH_PARENT
                             )
                         }
-                    },
-                    update = { view ->
-                        // Ép Agora render lại vào view này mỗi khi UI cập nhật
-                        viewModel.setupLocalVideo(view)
                     },
                     modifier = Modifier.fillMaxSize()
                 )

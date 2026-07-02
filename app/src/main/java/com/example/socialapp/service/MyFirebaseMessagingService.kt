@@ -25,10 +25,29 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
     override fun onMessageReceived(message: RemoteMessage) {
         val data = message.data
         when (data["type"]) {
-            "incoming_call" -> showIncomingCallNotification(data)
+            "incoming_call" -> checkAndShowIncomingCall(data)
             "cancel_call"   -> cancelCallNotification(this)
             "new_message"   -> showMessageNotification(data)
         }
+    }
+
+    private fun checkAndShowIncomingCall(data: Map<String, String>) {
+        val callId = data["callId"] ?: return
+        
+        // Tránh tình trạng notification tới trễ (sau khi cuộc gọi đã kết thúc hoặc bắt máy)
+        FirebaseFirestore.getInstance().collection("calls").document(callId)
+            .get()
+            .addOnSuccessListener { doc ->
+                if (doc.exists() && doc.getString("status") == "ringing") {
+                    showIncomingCallNotification(data)
+                } else {
+                    android.util.Log.d("FCMService", "Ignoring stale incoming call notification for callId=$callId")
+                }
+            }
+            .addOnFailureListener {
+                // Nếu lỗi mạng, cứ show tạm, vào Activity nó sẽ tự kiểm tra lại
+                showIncomingCallNotification(data)
+            }
     }
 
     private fun showIncomingCallNotification(data: Map<String, String>) {

@@ -16,6 +16,7 @@ import androidx.core.app.NotificationManagerCompat
 import com.example.socialapp.service.MyFirebaseMessagingService
 import com.example.socialapp.ui.call.CallState
 import com.example.socialapp.ui.call.CallViewModel
+import com.google.firebase.firestore.FirebaseFirestore
 import androidx.hilt.navigation.compose.hiltViewModel
 
 /**
@@ -34,6 +35,23 @@ class IncomingCallActivity : ComponentActivity() {
         val callerAvatar = intent.getStringExtra("callerAvatar") ?: ""
         val callType = intent.getStringExtra("callType") ?: "voice"
         val callerId = intent.getStringExtra("callerId") ?: ""
+
+        // ═══ BẢO VỆ: Kiểm tra trạng thái cuộc gọi TRƯỚC KHI hiển thị UI ═══
+        // Nếu FCM notification đến trễ (cuộc gọi đã kết thúc), đóng Activity ngay lập tức.
+        if (callId.isNotEmpty()) {
+            FirebaseFirestore.getInstance().collection("calls").document(callId)
+                .get()
+                .addOnSuccessListener { doc ->
+                    val status = doc.getString("status")
+                    if (status != "ringing") {
+                        android.util.Log.d("IncomingCallActivity",
+                            "Call $callId status=$status (not ringing), closing immediately")
+                        NotificationManagerCompat.from(this)
+                            .cancel(MyFirebaseMessagingService.CALL_NOTIFICATION_ID)
+                        finish()
+                    }
+                }
+        }
 
         setContent {
             SocialAppTheme {

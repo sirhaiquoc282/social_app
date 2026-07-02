@@ -95,7 +95,7 @@ class AgoraManager @Inject constructor(
     }
 
     /** Tham gia channel video */
-    fun joinVideoChannel(channelName: String, localView: SurfaceView, uid: Int = 0) {
+    fun joinVideoChannel(channelName: String, localView: android.view.View, uid: Int = 0) {
         if (engine == null) return
         engine?.apply {
             enableAudio()
@@ -119,14 +119,14 @@ class AgoraManager @Inject constructor(
     }
 
     /** Setup video cho remote user */
-    fun setupRemoteVideo(remoteView: SurfaceView, remoteUid: Int) {
+    fun setupRemoteVideo(remoteView: android.view.View, remoteUid: Int) {
         engine?.setupRemoteVideo(
             VideoCanvas(remoteView, VideoCanvas.RENDER_MODE_HIDDEN, remoteUid)
         )
     }
 
     /** Setup video cho local user */
-    fun setupLocalVideo(localView: SurfaceView) {
+    fun setupLocalVideo(localView: android.view.View) {
         engine?.setupLocalVideo(
             VideoCanvas(localView, VideoCanvas.RENDER_MODE_HIDDEN, 0)
         )
@@ -136,6 +136,11 @@ class AgoraManager @Inject constructor(
     fun muteVideo(muted: Boolean) { engine?.muteLocalVideoStream(muted) }
     fun switchCamera() { engine?.switchCamera() }
     fun setSpeaker(on: Boolean) { engine?.setEnableSpeakerphone(on) }
+
+    /** Tạo TextureView chuẩn của Agora (tốt hơn SurfaceView khi dùng với Jetpack Compose) */
+    fun createRendererView(ctx: Context): android.view.TextureView {
+        return RtcEngine.CreateTextureView(ctx)
+    }
 
     /**
      * Rời khỏi channel hiện tại nhưng GIỮ engine lại (để tái sử dụng nhanh cho cuộc gọi kế tiếp).

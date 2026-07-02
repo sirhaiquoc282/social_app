@@ -97,14 +97,14 @@ fun CallsScreen(
                         currentUid = uid,
                         onVoiceCall = {
                             val otherId = if (signal.callerId == uid) signal.calleeId else signal.callerId
-                            val otherName = if (signal.callerId == uid) "Contact" else signal.callerName
-                            val otherAvatar = if (signal.callerId == uid) "" else signal.callerAvatar
+                            val otherName = if (signal.callerId == uid) signal.calleeName.ifBlank { "Contact" } else signal.callerName
+                            val otherAvatar = if (signal.callerId == uid) signal.calleeAvatar else signal.callerAvatar
                             onNavigateToVoiceCall(otherId, otherName, otherAvatar)
                         },
                         onVideoCall = {
                             val otherId = if (signal.callerId == uid) signal.calleeId else signal.callerId
-                            val otherName = if (signal.callerId == uid) "Contact" else signal.callerName
-                            val otherAvatar = if (signal.callerId == uid) "" else signal.callerAvatar
+                            val otherName = if (signal.callerId == uid) signal.calleeName.ifBlank { "Contact" } else signal.callerName
+                            val otherAvatar = if (signal.callerId == uid) signal.calleeAvatar else signal.callerAvatar
                             onNavigateToVideoCall(otherId, otherName, otherAvatar)
                         }
                     )
@@ -122,9 +122,9 @@ private fun CallHistoryItem(
     onVideoCall: () -> Unit
 ) {
     val isOutgoing = signal.callerId == currentUid
-    val otherName = if (isOutgoing) "Contact" else signal.callerName
-    val otherAvatar = if (isOutgoing) "" else signal.callerAvatar
-    val isMissed = signal.status == "missed" || signal.status == "declined"
+    val otherName = if (isOutgoing) signal.calleeName.ifBlank { "Contact" } else signal.callerName
+    val otherAvatar = if (isOutgoing) signal.calleeAvatar else signal.callerAvatar
+    val isMissedByMe = !isOutgoing && (signal.status == "missed" || signal.status == "declined")
     val isAnswered = signal.status == "accepted" || signal.status == "ended"
 
     val timeStr = signal.createdAt?.toDate()?.let {
@@ -138,8 +138,10 @@ private fun CallHistoryItem(
     } ?: ""
 
     val statusColor = when {
-        isMissed -> MissedRed
+        isMissedByMe -> MissedRed
         isAnswered && isOutgoing -> OnlineGreen
+        !isOutgoing && isAnswered -> ChatboxTealAccent
+        isOutgoing -> TextSecondary
         else -> ChatboxTealAccent
     }
 

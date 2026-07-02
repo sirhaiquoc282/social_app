@@ -69,6 +69,8 @@ fun VoiceCallScreen(
                     .currentUser?.displayName ?: "Unknown",
                 callerAvatar = com.google.firebase.auth.FirebaseAuth.getInstance()
                     .currentUser?.photoUrl?.toString() ?: "",
+                calleeName = calleeName,
+                calleeAvatar = calleeAvatar,
                 type = "voice"
             )
         }

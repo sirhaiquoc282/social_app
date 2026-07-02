@@ -116,6 +116,9 @@ dependencies {
 
     // Agora RTC
     implementation(libs.agora.rtc)
+
+    // DataStore Preferences
+    implementation(libs.androidx.datastore.preferences)
 }
 
 kapt {
